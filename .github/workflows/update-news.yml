@@ -2,7 +2,7 @@ name: Update news
 
 on:
   schedule:
-    - cron: "*/30 * * * *"   # every 30 minutes
+    - cron: "0 */3 * * *"   # every 30 minutes
   workflow_dispatch:          # adds a "Run workflow" button
 
 permissions:
