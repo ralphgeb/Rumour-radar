@@ -54,6 +54,20 @@
   {"name": "Business Insider", "section": "Finance", "url": "https://feeds.businessinsider.com/custom/all"},
   {"name": "CoinDesk", "section": "Finance", "url": "https://www.coindesk.com/arc/outboundfeeds/rss/"},
   {"name": "Google News: business", "section": "Finance", "url": "https://news.google.com/rss/headlines/section/topic/BUSINESS?hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Reuters (via Google News)", "section": "Finance", "url": "https://news.google.com/rss/search?q=site:reuters.com+(markets+OR+business+OR+economy)+when:1d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Financial Times (via Google News)", "section": "Finance", "url": "https://news.google.com/rss/search?q=site:ft.com+when:1d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Bloomberg (via Google News)", "section": "Finance", "url": "https://news.google.com/rss/search?q=site:bloomberg.com+when:1d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Barron's (via Google News)", "section": "Finance", "url": "https://news.google.com/rss/search?q=site:barrons.com+when:1d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "The Wall Street Journal (via Google News)", "section": "Finance", "url": "https://news.google.com/rss/search?q=site:wsj.com+(markets+OR+business)+when:1d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Google News: markets", "section": "Finance", "url": "https://news.google.com/rss/search?q=(stocks+OR+markets+OR+FTSE+OR+%22S%26P+500%22+OR+Nasdaq+OR+bonds)+when:1d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Sky News Business", "section": "Finance", "url": "https://feeds.skynews.com/feeds/rss/business.xml"},
+  {"name": "City AM", "section": "Finance", "url": "https://www.cityam.com/feed/"},
+  {"name": "This is Money", "section": "Finance", "url": "https://www.thisismoney.co.uk/money/index.rss"},
+  {"name": "The Telegraph Money", "section": "Finance", "url": "https://www.telegraph.co.uk/money/rss.xml"},
+  {"name": "The Independent Business", "section": "Finance", "url": "https://www.independent.co.uk/news/business/rss"},
+  {"name": "Fortune", "section": "Finance", "url": "https://fortune.com/feed/"},
+  {"name": "Forbes Business", "section": "Finance", "url": "https://www.forbes.com/business/feed/"},
+  {"name": "Morningstar UK", "section": "Finance", "url": "https://www.morningstar.co.uk/uk/news/rss.aspx"},
   {"name": "BBC World", "section": "World", "url": "https://feeds.bbci.co.uk/news/world/rss.xml"},
   {"name": "BBC UK", "section": "World", "url": "https://feeds.bbci.co.uk/news/uk/rss.xml"},
   {"name": "The Guardian World", "section": "World", "url": "https://www.theguardian.com/world/rss"},
@@ -66,5 +80,6 @@
   {"name": "France 24", "section": "World", "url": "https://www.france24.com/en/rss"},
   {"name": "The Telegraph World", "section": "World", "url": "https://www.telegraph.co.uk/news/world/rss.xml"},
   {"name": "Google News: world", "section": "World", "url": "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-GB&gl=GB&ceid=GB:en"},
-  {"name": "Google News: top stories", "section": "World", "url": "https://news.google.com/rss?hl=en-GB&gl=GB&ceid=GB:en"}
+  {"name": "Google News: top stories", "section": "World", "url": "https://news.google.com/rss?hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Reuters World (via Google News)", "section": "World", "url": "https://news.google.com/rss/search?q=site:reuters.com+world+when:1d&hl=en-GB&gl=GB&ceid=GB:en"}
 ]

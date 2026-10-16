@@ -29,6 +29,10 @@ const MAX_STORIES = 600;       // keep the data file small and fast
 const MAX_SEEN = 8000;         // how many article links to remember
 const ARTICLE_CHARS = 6000;    // how much of each article the AI reads
 const UPGRADE_MAX = 36;        // older stories per run that get a write-up added
+// Share of each run's full analyses per section, so no section crowds out the others.
+const SECTION_SHARE = { Tech: 0.4, Finance: 0.35, World: 0.25 };
+// Sources that never appear in the app.
+const BLOCKED = /cnbc/i;
 
 import { parseFeed, findMetaImage, stripHtml } from './feed-parser.mjs';
 import fs from 'node:fs/promises';
@@ -132,6 +136,7 @@ export async function collect(feeds, seen) {
   const seenSet = new Set(seen);
   const unique = new Map();
   for (const a of all) {
+    if (BLOCKED.test(a.source) || BLOCKED.test(a.link)) continue;
     if (seenSet.has(a.link) || unique.has(a.link)) continue;
     if (new Date(a.published).getTime() < cutoff) continue;
     unique.set(a.link, a);
@@ -214,6 +219,7 @@ const ANALYSIS_TOOL = {
             topics: { type: 'array', items: { type: 'string', enum: TOPICS } },
             overall_impact: { type: 'string', enum: ['none', 'low', 'medium', 'high'], description: 'Likely market impact (if a rumour: if it turns out true).' },
             market_take: { type: 'string', description: 'One short sentence on how this could affect investors or the stocks below. Empty string if there is no market angle.' },
+            image_subject: { type: 'string', description: 'Exact title of the English Wikipedia article whose picture best illustrates this story: the main company, person, product, institution or place (e.g. "Nvidia", "Bank of England", "Federal Reserve", "Strait of Hormuz", "iPhone"). Empty string if nothing fits.' },
             stocks: {
               type: 'array',
               description: 'Up to 5 publicly traded companies most likely to be affected by this news (or by the rumour if true): the company itself, rivals, suppliers or partners. For world, political or economic news you may instead list the most affected index, currency or commodity using Yahoo Finance symbols (e.g. ^FTSE, ^GSPC, GBPUSD=X, CL=F for oil, GC=F for gold). Use real primary listing tickers (e.g. AAPL, 005930.KS, BARC.L). Empty if none.',
@@ -230,7 +236,7 @@ const ANALYSIS_TOOL = {
               }
             }
           },
-          required: ['article_index', 'keep', 'same_story_as', 'status', 'claim', 'summary', 'key_points', 'story', 'likelihood', 'likelihood_reason', 'signals', 'topics', 'overall_impact', 'market_take', 'stocks']
+          required: ['article_index', 'keep', 'same_story_as', 'status', 'claim', 'summary', 'key_points', 'story', 'likelihood', 'likelihood_reason', 'signals', 'topics', 'overall_impact', 'market_take', 'image_subject', 'stocks']
         }
       }
     },
@@ -432,6 +438,7 @@ export function sanitise(an) {
     topics: topics.length ? topics : ['Other'],
     overall_impact: IMPACT_RANK[an.overall_impact] !== undefined ? an.overall_impact : 'low',
     market_take: trim(an.market_take, 240),
+    image_subject: trim(an.image_subject, 100),
     stocks
   };
 }
@@ -494,6 +501,7 @@ export function mergeBatch(stories, batch, analyses, now = new Date().toISOStrin
         headline: art.title,
         section: normSection(art.section),
         image: art.image || '',
+        image_checked: true,
         ...clean,
         sources: [sourceEntry],
         first_seen: now,
@@ -651,6 +659,7 @@ export async function upgradeOld(stories, apiKey) {
         if (!s.market_take && c.market_take) s.market_take = c.market_take;
         if (!(s.stocks || []).length && c.stocks.length) s.stocks = c.stocks;
         if (!s.image && a.image) s.image = a.image;
+        if (!s.image_subject && c.image_subject) s.image_subject = c.image_subject;
         done++;
       }
     } catch (e) {
@@ -660,6 +669,136 @@ export async function upgradeOld(stories, apiKey) {
     batch.forEach((a) => { a.story.upgrade_tried = true; a.story.image_checked = true; });
   }
   log(`Upgraded ${done} older stories with write-ups; checked ${needImage.length} for pictures.`);
+}
+
+// ---------- Fair mix: share each run between sections and outlets ----------
+export function pickFair(groups, max) {
+  if (groups.length <= max) return groups;
+  const bySection = {};
+  for (const g of groups) (bySection[g.art.section] ||= []).push(g);
+  // within a section, take outlets in turn (newest first from each)
+  const roundRobin = (list) => {
+    const bySrc = new Map();
+    for (const g of list) { if (!bySrc.has(g.art.source)) bySrc.set(g.art.source, []); bySrc.get(g.art.source).push(g); }
+    const queues = [...bySrc.values()];
+    const out = [];
+    while (queues.some((q) => q.length)) for (const q of queues) if (q.length) out.push(q.shift());
+    return out;
+  };
+  const ordered = Object.fromEntries(Object.entries(bySection).map(([k, v]) => [k, roundRobin(v)]));
+  const picked = [];
+  for (const [sec, share] of Object.entries(SECTION_SHARE)) picked.push(...(ordered[sec] || []).splice(0, Math.round(max * share)));
+  // spare places go to whatever is left, still taking outlets in turn
+  const rest = roundRobin(Object.values(ordered).flat());
+  return [...picked, ...rest].slice(0, max);
+}
+
+// ---------- Pictures from Wikipedia when a site doesn't give one ----------
+async function wikiImage(title) {
+  if (!title) return '';
+  try {
+    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}?redirect=true`, {
+      headers: { 'User-Agent': 'RumourRadar/1.0 (personal news app)', Accept: 'application/json' }
+    });
+    if (!res.ok) return '';
+    const j = await res.json();
+    if (j.type === 'disambiguation') return '';
+    const thumb = j.thumbnail?.source || '';
+    if (thumb) return thumb.replace(/\/(\d+)px-/, '/800px-');
+    const orig = j.originalimage?.source || '';
+    return /\.(jpe?g|png|webp)$/i.test(orig) ? orig : '';
+  } catch { return ''; }
+}
+
+const SUBJECT_TOOL = {
+  name: 'record_subjects',
+  description: 'Record a picture subject for every headline.',
+  input_schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: {
+    i: { type: 'integer' },
+    subject: { type: 'string', description: 'Exact English Wikipedia article title whose picture best illustrates the story (company, person, product, institution or place), or "" if nothing fits.' }
+  }, required: ['i', 'subject'] } } }, required: ['items'] }
+};
+
+export async function fillMissingImages(stories, apiKey) {
+  const cutoff = new Date(Date.now() - 72 * 3600e3).toISOString();
+  const need = stories.filter((s) => !s.image && !s.wiki_checked && (s.last_updated || '') >= cutoff).slice(0, 150);
+  if (!need.length) return;
+  // stories from before this version have no picture subject yet: ask for them in one cheap request
+  const noSubject = need.filter((s) => !s.image_subject);
+  for (const part of chunk(noSubject, 80)) {
+    try {
+      const input = await callClaude({
+        model: MODEL, max_tokens: 3000,
+        system: 'For each news headline, give the exact English Wikipedia article title whose lead picture would best illustrate it. Call record_subjects once.',
+        tools: [SUBJECT_TOOL], tool_choice: { type: 'tool', name: 'record_subjects' },
+        messages: [{ role: 'user', content: part.map((s, i) => `[${i}] ${s.headline || s.claim}`).join('\n') }]
+      }, apiKey);
+      for (const it of input.items || []) if (part[it.i]) part[it.i].image_subject = trim(it.subject, 100);
+    } catch (e) { if (e.fatal) throw e; log(`Picture subjects skipped: ${e.message}`); }
+  }
+  let found = 0;
+  for (const part of chunk(need, 8)) {
+    await Promise.all(part.map(async (s) => {
+      const img = await wikiImage(s.image_subject);
+      if (img) { s.image = img; s.image_credit = 'Wikipedia'; found++; }
+      s.wiki_checked = true;
+    }));
+  }
+  log(`Wikipedia pictures: added ${found} of ${need.length} stories that had none.`);
+}
+
+// ---------- "Today in Tech / Finance / World" covers ----------
+const SECTION_TOOL = {
+  name: 'record_section_brief',
+  description: 'Record the section summary.',
+  input_schema: { type: 'object', properties: {
+    lead_story_id: { type: 'string', description: 'Id of the single most important story right now.' },
+    title: { type: 'string', description: 'The main topic of the day as a headline, max 70 chars, in your own words.' },
+    summary: { type: 'string', description: '3-4 sentences on what is happening in this area today, in your own words.' },
+    points: { type: 'array', description: '3-4 other key things happening, each tied to a story.', items: { type: 'object', properties: {
+      story_id: { type: 'string' }, text: { type: 'string', description: 'One sentence, max 120 chars.' }
+    }, required: ['story_id', 'text'] } },
+    movers: { type: 'array', description: 'Up to 6 stocks, indices, currencies or commodities most affected by today\u2019s news in this area (Yahoo Finance symbols).', items: { type: 'object', properties: {
+      ticker: { type: 'string' }, name: { type: 'string' }, direction: { type: 'string', enum: ['up', 'down', 'mixed'] }, note: { type: 'string', description: 'Max 80 chars.' }
+    }, required: ['ticker', 'name', 'direction', 'note'] } }
+  }, required: ['lead_story_id', 'title', 'summary', 'points', 'movers'] }
+};
+const SECTION_FOCUS = {
+  Tech: 'tech, AI, gadgets, big tech companies, startups and venture capital',
+  Finance: 'markets, companies, earnings, deals, central banks and the economy',
+  World: 'major world and political news, and what it could mean for markets'
+};
+
+export async function makeSectionBriefs(stories, apiKey, now = new Date()) {
+  const since = new Date(now.getTime() - 18 * 3600e3).toISOString();
+  const score = (s) => (s.sources?.length || 1) * 2 + (IMPACT_RANK[s.overall_impact] || 0) * 2 + (s.image ? 1 : 0);
+  const out = {};
+  await runParallel(Object.keys(SECTION_FOCUS), PARALLEL, async (sec) => {
+    const pool = stories.filter((s) => normSection(s.section) === sec && ((s.first_published || s.first_seen || '') >= since || (s.last_updated || '') >= since))
+      .sort((a, b) => score(b) - score(a)).slice(0, 60);
+    if (pool.length < 3) return;
+    const ids = new Set(pool.map((s) => s.id));
+    try {
+      const x = await callClaude({
+        model: BRIEFING_MODEL, max_tokens: 2500,
+        system: `You are the ${sec} editor of a news app. Using only the stories given, say what the main topic in ${SECTION_FOCUS[sec]} is right now and summarise what is happening. Neutral, British English, your own words. Call record_section_brief once.`,
+        tools: [SECTION_TOOL], tool_choice: { type: 'tool', name: 'record_section_brief' },
+        messages: [{ role: 'user', content: pool.map((s) => `${s.id} | ${s.sources.length} outlet(s) | ${s.status} | ${s.headline || s.claim}\n   ${s.summary}${(s.stocks || []).length ? '\n   Stocks: ' + s.stocks.map((k) => `${k.ticker} ${k.direction}`).join(', ') : ''}`).join('\n') }]
+      }, apiKey);
+      out[sec] = {
+        generated: now.toISOString(),
+        lead_story_id: ids.has(x.lead_story_id) ? x.lead_story_id : pool[0].id,
+        title: trim(x.title, 100),
+        summary: trim(x.summary, 800),
+        points: (x.points || []).filter((p) => ids.has(p.story_id)).slice(0, 4).map((p) => ({ story_id: p.story_id, text: trim(p.text, 160) })),
+        movers: (x.movers || []).filter((m) => /^[A-Z0-9.\-^=]{1,15}$/i.test(m.ticker || '')).slice(0, 6).map((m) => ({
+          ticker: m.ticker.toUpperCase(), name: trim(m.name, 50), direction: ['up', 'down', 'mixed'].includes(m.direction) ? m.direction : 'mixed', note: trim(m.note, 100)
+        }))
+      };
+    } catch (e) { if (e.fatal) throw e; log(`${sec} summary skipped: ${e.message}`); }
+  });
+  log(`Section summaries written: ${Object.keys(out).join(', ') || 'none'}.`);
+  return out;
 }
 
 // ---------- Main ----------
@@ -679,7 +818,7 @@ export async function main() {
   log(`${fresh.length} new articles found; checking ${pool.length} headlines.`);
   const done = [];
   const groups = await triageAll(pool, news.stories, apiKey, done);
-  const todo = groups.slice(0, MAX_NEW_PER_RUN);
+  const todo = pickFair(groups, MAX_NEW_PER_RUN);
   if (groups.length > todo.length) log(`${groups.length - todo.length} stories left for the next run.`);
   await readArticles(todo.map((g) => g.art));
 
@@ -709,8 +848,9 @@ export async function main() {
   });
 
   const cutoff = new Date(Date.now() - KEEP_DAYS * 86400e3).toISOString();
+  for (const s of news.stories) s.sources = (s.sources || []).filter((x) => !BLOCKED.test(x.name) && !BLOCKED.test(x.link));
   news.stories = news.stories
-    .filter((s) => s.last_updated >= cutoff)
+    .filter((s) => s.sources.length && s.last_updated >= cutoff)
     .sort((a, b) => b.last_updated.localeCompare(a.last_updated))
     .slice(0, MAX_STORIES);
   for (const s of news.stories) {
@@ -720,6 +860,10 @@ export async function main() {
   try { await upgradeOld(news.stories, apiKey); } catch (e) {
     if (e.fatal) { console.error('\n❌ ' + e.message + '\n'); process.exit(1); }
     log(`Upgrading older stories failed: ${e.message}`);
+  }
+  try { await fillMissingImages(news.stories, apiKey); } catch (e) {
+    if (e.fatal) { console.error('\n❌ ' + e.message + '\n'); process.exit(1); }
+    log(`Wikipedia pictures failed: ${e.message}`);
   }
   news.updated = new Date().toISOString();
   news.model = MODEL;
@@ -736,6 +880,13 @@ export async function main() {
       if (e.fatal) { console.error('\n❌ ' + e.message + '\n'); process.exit(1); }
       log(`Briefing failed, keeping the previous one: ${e.message}`);
     }
+  }
+  try {
+    const secs = await makeSectionBriefs(news.stories, apiKey);
+    briefing.sections = { ...(briefing.sections || {}), ...secs };
+  } catch (e) {
+    if (e.fatal) { console.error('\n❌ ' + e.message + '\n'); process.exit(1); }
+    log(`Section summaries failed: ${e.message}`);
   }
   briefing.updated = new Date().toISOString();
 

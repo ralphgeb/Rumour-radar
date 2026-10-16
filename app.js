@@ -153,7 +153,9 @@
         fetch('data/news.json?t=' + Date.now(), { cache: 'no-store' }).then((r) => (r.ok ? r.json() : Promise.reject(r.status))),
         fetch('data/briefing.json?t=' + Date.now(), { cache: 'no-store' }).then((r) => (r.ok ? r.json() : { editions: [] })).catch(() => ({ editions: [] }))
       ]);
-      stories = Array.isArray(n.stories) ? n.stories : [];
+      stories = (Array.isArray(n.stories) ? n.stories : [])
+        .map((s) => ({ ...s, sources: (s.sources || []).filter((x) => !/cnbc/i.test(x.name || '') && !/cnbc/i.test(x.link || '')) }))
+        .filter((s) => s.sources.length);
       byId = new Map(stories.map((s) => [s.id, s]));
       updated = n.updated;
       lastRun = n.last_run || null;
@@ -408,6 +410,35 @@
     </a>`;
   }
 
+  const SECTION_LABEL = { Tech: 'Tech today', Finance: 'Markets today', World: 'World today' };
+  function sectionCover(sec, b) {
+    const lead = byId.get(b.lead_story_id);
+    const pts = (b.points || []).map((p) => ({ ...p, s: byId.get(p.story_id) }));
+    return `<section class="sec-cover">
+      <a class="sec-hero sec-${esc(sec)}" href="#" ${lead ? `data-story="${esc(lead.id)}"` : ''}>
+        ${media(lead)}
+        <div class="over">
+          <span class="edition">${esc(SECTION_LABEL[sec] || sec)} · ${esc(londonTime(b.generated))}</span>
+          <h2>${esc(b.title)}</h2>
+        </div>
+      </a>
+      <div class="sec-body">
+        <p class="sec-sum">${esc(b.summary)}</p>
+        ${pts.length ? `<div class="sec-points">${pts.map((p) => `
+          <a class="sec-point" href="#" ${p.s ? `data-story="${esc(p.s.id)}"` : ''}>
+            <span class="b"></span><span class="t">${esc(p.text)}</span>${p.s ? chevron : ''}
+          </a>`).join('')}</div>` : ''}
+        ${(b.movers || []).length ? `<div class="movers-label">${sec === 'World' ? 'Market impact' : 'Movers to watch'}</div>
+          <div class="movers">${b.movers.map((m) => `
+            <button class="mover" data-ticker="${esc(m.ticker)}" title="${esc(m.note)}">
+              <span class="mt"><span class="${esc(m.direction)}">${ARROW[m.direction] || '◆'}</span> ${esc(m.ticker)}</span>
+              <span class="mn">${esc(m.name)}</span>
+              <span class="mnote">${esc(m.note)}</span>
+            </button>`).join('')}</div>` : ''}
+      </div>
+    </section>`;
+  }
+
   function renderNews() {
     $('#today').textContent = londonDay(new Date().toISOString());
     $('#updatedNews').textContent = updated ? `Updated ${ago(updated).toLowerCase()} · next ${nextUpdateLabel()}` : 'Waiting for the first update';
@@ -421,11 +452,17 @@
       return;
     }
     const items = all.slice(0, state.newsLimit);
-    const topIdx = Math.max(0, items.slice(0, 6).findIndex((s) => imageOf(s)));
-    const top = items[topIdx];
-    const rest = items.filter((_, i) => i !== topIdx);
-
-    let html = heroCard(top);
+    const brief = ['Tech', 'Finance', 'World'].includes(state.section) ? (briefing.sections || {})[state.section] : null;
+    let html;
+    let rest;
+    if (brief) {
+      html = sectionCover(state.section, brief);
+      rest = items;
+    } else {
+      const topIdx = Math.max(0, items.slice(0, 6).findIndex((s) => imageOf(s)));
+      html = heroCard(items[topIdx]);
+      rest = items.filter((_, i) => i !== topIdx);
+    }
     html += sectionHead('Latest', `${all.length} stories`);
     for (let i = 0; i < rest.length; i += 8) {
       const chunk = rest.slice(i, i + 8);
@@ -677,7 +714,7 @@
       </section>`;
 
     const html = `
-      ${hasImg ? `<div class="story-hero">${media(s)}</div>` : ''}
+      ${hasImg ? `<div class="story-hero">${media(s)}${s.image_credit ? `<span class="credit">Image: ${esc(s.image_credit)}</span>` : ''}</div>` : ''}
       <div class="story-head" ${hasImg ? '' : 'style="padding-top:12px"'}>
         <div class="meta">${sourceLine(s)}<span class="dot">${ago(pubTime(s))}</span></div>
         <h1>${esc(headline(s))}</h1>

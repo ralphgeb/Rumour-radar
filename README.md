@@ -162,7 +162,9 @@ The app has four tabs along the bottom.
   - **For You** (your interests)
   - **Tech** (gadgets, AI, companies, startups and VC)
   - **Finance** (Bloomberg, FT, Telegraph, WSJ, Washington Post and more)
-  - **World** (BBC, Guardian, Sky, Al Jazeera, NYT, Google News top stories and more)
+  - **World** (BBC, Guardian, Sky, Al Jazeera, NYT, Reuters, Google News top stories and more)
+
+  Tech, Finance and World each open with a **"today" cover**: the main topic, a short summary, the other key stories, and the stocks, indices or currencies to watch.
 - **Rumours** shows unconfirmed stories with the AI's odds that each one is true:
   - green: likely
   - amber: toss-up
@@ -216,6 +218,8 @@ Check **console.anthropic.com → Usage** after the first day to see the real co
 
 ## Good to know
 
-- The app shows each article's headline and preview picture as published by the site.
+- The app shows each article's headline and preview picture as published by the site. When a site blocks its picture (Bloomberg and the FT often do), the app uses a freely licensed picture of the main subject from Wikipedia, marked "Image: Wikipedia".
+- Bloomberg, the FT, Reuters, Barron's and the WSJ are also reached through Google News searches, which gets through more of their headlines.
+- CNBC is excluded everywhere.
 - The summaries, key points and full write-ups are written by AI in its own words. The app never copies the publishers' articles, and the button on every story opens the original.
 - **The write-ups, odds and stock impacts are AI-generated. They can be wrong, and they are not financial advice.**
