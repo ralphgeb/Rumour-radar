@@ -1,9 +1,9 @@
-// Tiny RSS + Atom parser with no dependencies.
+// Tiny RSS + Atom parser with no dependencies. Also finds each article's image.
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', hellip: '…', mdash: '—', ndash: '–', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“', pound: '£', euro: '€' };
 
 export function decodeEntities(s) {
-  return s.replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
+  return String(s ?? '').replace(/&(#x[0-9a-f]+|#\d+|[a-z]+);/gi, (m, e) => {
     if (e[0] === '#') {
       const code = e[1].toLowerCase() === 'x' ? parseInt(e.slice(2), 16) : parseInt(e.slice(1), 10);
       try { return String.fromCodePoint(code); } catch { return m; }
@@ -36,11 +36,51 @@ function tag(block, name) {
   return m ? unwrap(m[1]) : '';
 }
 
+function attr(tagText, name) {
+  const m = tagText.match(new RegExp(`\\b${name}\\s*=\\s*["']([^"']+)["']`, 'i'));
+  return m ? decodeEntities(m[1]) : '';
+}
+
 function atomLink(block) {
   const links = [...block.matchAll(/<link\b([^>]*?)\/?>/gi)].map((m) => m[1]);
   const pick = links.find((a) => /rel=["']alternate["']/i.test(a)) || links.find((a) => !/rel=/i.test(a)) || links[0];
-  const href = pick && pick.match(/href=["']([^"']+)["']/i);
-  return href ? decodeEntities(href[1]) : '';
+  return pick ? attr(pick, 'href') : '';
+}
+
+const looksLikeImage = (u) => /\.(jpe?g|png|webp|gif|avif)(\?|$)/i.test(u) || /\/(image|img|media|wp-content|uploads|resize|photo)/i.test(u);
+
+export function findImage(block) {
+  const candidates = [];
+  // <media:content url=".." medium="image"> and <media:thumbnail url="..">
+  for (const m of block.matchAll(/<media:(content|thumbnail)\b([^>]*)>/gi)) {
+    const url = attr(m[2], 'url');
+    const medium = attr(m[2], 'medium');
+    const type = attr(m[2], 'type');
+    const width = Number(attr(m[2], 'width')) || 0;
+    if (url && (medium === 'image' || /^image\//.test(type) || m[1] === 'thumbnail' || looksLikeImage(url))) {
+      candidates.push({ url, score: width || (m[1] === 'content' ? 600 : 300) });
+    }
+  }
+  // <enclosure url=".." type="image/jpeg">
+  for (const m of block.matchAll(/<enclosure\b([^>]*)>/gi)) {
+    const url = attr(m[1], 'url');
+    if (url && (/^image\//.test(attr(m[1], 'type')) || looksLikeImage(url))) candidates.push({ url, score: 500 });
+  }
+  // <itunes:image href="..">
+  for (const m of block.matchAll(/<itunes:image\b([^>]*)>/gi)) {
+    const url = attr(m[1], 'href');
+    if (url) candidates.push({ url, score: 200 });
+  }
+  // <img src=".."> inside the description / content (often HTML-encoded)
+  const html = decodeEntities(unwrap(block));
+  for (const m of html.matchAll(/<img\b([^>]*)>/gi)) {
+    const url = attr(m[1], 'src') || attr(m[1], 'data-src');
+    if (url && !/(pixel|tracking|feedburner|1x1|spacer|gravatar|emoji)/i.test(url)) candidates.push({ url, score: 100 });
+  }
+  const best = candidates
+    .filter((c) => /^https?:\/\//i.test(c.url))
+    .sort((a, b) => b.score - a.score)[0];
+  return best ? best.url.replace(/^http:\/\//i, 'https://') : '';
 }
 
 export function parseFeed(xml) {
@@ -54,10 +94,23 @@ export function parseFeed(xml) {
     let link = isAtom ? atomLink(block) : decodeEntities(tag(block, 'link').trim());
     if (!link) link = decodeEntities(tag(block, 'guid').trim());
     const date = tag(block, 'pubDate') || tag(block, 'published') || tag(block, 'updated') || tag(block, 'dc:date');
-    const desc = tag(block, 'description') || tag(block, 'summary') || tag(block, 'content') || tag(block, 'content:encoded');
+    const desc = tag(block, 'description') || tag(block, 'summary') || tag(block, 'content:encoded') || tag(block, 'content');
     const d = date ? new Date(date.trim()) : null;
     const isoDate = d && !isNaN(d) ? d.toISOString() : undefined;
-    items.push({ title, link, isoDate, contentSnippet: stripHtml(desc) });
+    items.push({ title, link, isoDate, contentSnippet: stripHtml(desc), image: findImage(block) });
   }
   return items;
+}
+
+// Reads the start of an article page and returns its preview image (og:image / twitter:image).
+export function findMetaImage(html, pageUrl) {
+  const metas = [...html.matchAll(/<meta\b[^>]*>/gi)].map((m) => m[0]);
+  for (const key of ['og:image:secure_url', 'og:image', 'twitter:image', 'twitter:image:src']) {
+    const tagText = metas.find((t) => new RegExp(`(property|name)\\s*=\\s*["']${key.replace(/:/g, '\\:')}["']`, 'i').test(t));
+    const content = tagText && attr(tagText, 'content');
+    if (content) {
+      try { return new URL(content, pageUrl).toString().replace(/^http:\/\//i, 'https://'); } catch { /* ignore */ }
+    }
+  }
+  return '';
 }
