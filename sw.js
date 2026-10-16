@@ -1,6 +1,6 @@
 // Offline support: the app shell is cached, the news is always fetched fresh
 // when there is a connection and falls back to the last copy when offline.
-const VERSION = 'rr-v1';
+const VERSION = 'rr-v3';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
@@ -17,7 +17,7 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== 'GET' || url.origin !== location.origin) return;
 
-  if (url.pathname.endsWith('/data/news.json')) {
+  if (url.pathname.endsWith('.json')) {
     // network first
     e.respondWith(fetch(e.request).then((res) => {
       const copy = res.clone();

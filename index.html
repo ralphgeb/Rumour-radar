@@ -4,85 +4,189 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Rumour Radar</title>
-  <meta name="description" content="Business and tech rumours, how likely they are, and which stocks they could move.">
-  <meta name="theme-color" content="#0a0f1c">
+  <meta name="description" content="Your twice-daily tech, AI, gadget and market briefing, rumour odds, and the stocks each story could move.">
+  <meta name="theme-color" content="#f2f2f7" id="themeColor">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <meta name="apple-mobile-web-app-title" content="Radar">
+  <meta name="format-detection" content="telephone=no">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <script>
+    // Apply the Light / Dark / Automatic setting before the page draws, so it never flashes.
+    (function () {
+      var pref = 'auto';
+      try { pref = JSON.parse(localStorage.getItem('rr.theme')) || 'auto'; } catch (e) {}
+      var dark = pref === 'dark' || (pref === 'auto' && window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+      document.getElementById('themeColor').setAttribute('content', dark ? '#000000' : '#f2f2f7');
+    })();
+  </script>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header class="top">
-    <div class="brand">
-      <img src="icons/icon-192.png" alt="" class="logo">
-      <div>
-        <h1>Rumour Radar</h1>
-        <p class="updated" id="updated">Loading…</p>
-      </div>
-    </div>
-    <div class="top-actions">
-      <button class="icon-btn" id="refreshBtn" aria-label="Refresh">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      </button>
-      <button class="icon-btn" id="settingsBtn" aria-label="Settings">
-        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
-      </button>
-    </div>
+  <!-- Navigation bar -->
+  <header class="navbar" id="navbar">
+    <div class="navbar-title" id="navbarTitle">Today</div>
+    <button class="refresh" id="refreshBtn" aria-label="Refresh news">
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
+      <span class="refresh-label">Refreshing</span>
+      <span class="dots"><i></i><i></i><i></i></span>
+    </button>
   </header>
 
-  <nav class="controls">
-    <div class="segmented" role="tablist" id="statusTabs">
-      <button role="tab" data-status="rumour" class="active">Rumours</button>
-      <button role="tab" data-status="resolved">Confirmed / denied</button>
-      <button role="tab" data-status="all">All</button>
-    </div>
-    <div class="row">
-      <div class="chips" id="topicChips"></div>
-      <select id="sortSel" aria-label="Sort">
-        <option value="latest">Latest</option>
-        <option value="likely">Most likely</option>
-        <option value="impact">Biggest impact</option>
-      </select>
-    </div>
-  </nav>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <div class="ptr" id="ptr" aria-hidden="true"><div class="spinner"></div></div>
 
-  <main id="list" class="list" aria-live="polite"></main>
+  <main id="views">
+    <!-- TODAY -->
+    <section class="view active" data-view="today" data-title="Today">
+      <div class="large-title">
+        <p class="eyebrow" id="todayEyebrow"></p>
+        <h1>Today</h1>
+      </div>
+      <div id="todayBody"></div>
+    </section>
 
-  <p class="footnote">Likelihood and stock impact are AI estimates, not facts or financial advice. Always read the original sources.</p>
+    <!-- NEWS -->
+    <section class="view" data-view="news" data-title="News">
+      <div class="large-title">
+        <p class="eyebrow" id="today"></p>
+        <h1>News</h1>
+        <p class="subtitle" id="updatedNews">Loading…</p>
+      </div>
+      <div class="chips" id="sectionChips"></div>
+      <div id="newsList"></div>
+    </section>
 
-  <!-- Story detail -->
-  <dialog id="detail" class="sheet">
-    <div class="sheet-inner">
-      <button class="close" data-close aria-label="Close">✕</button>
-      <div id="detailBody"></div>
-    </div>
-  </dialog>
+    <!-- RUMOURS -->
+    <section class="view" data-view="rumours" data-title="Rumours">
+      <div class="large-title">
+        <p class="eyebrow">Unconfirmed · AI odds</p>
+        <h1>Rumours</h1>
+      </div>
+      <div class="pad">
+        <div class="segmented" id="rumourSeg">
+          <button data-v="rumour" class="on">Open</button>
+          <button data-v="confirmed">Confirmed</button>
+          <button data-v="denied">Denied</button>
+        </div>
+        <div class="toolbar">
+          <span class="count" id="rumourCount"></span>
+          <label class="menu-btn">
+            <span id="rumourSortLabel">Latest</span>
+            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg>
+            <select id="rumourSort" aria-label="Sort rumours">
+              <option value="latest">Latest</option>
+              <option value="likely">Most likely</option>
+              <option value="unlikely">Least likely</option>
+              <option value="impact">Biggest impact</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div id="rumourList"></div>
+    </section>
 
-  <!-- Settings / onboarding -->
-  <dialog id="settings" class="sheet">
-    <div class="sheet-inner">
-      <button class="close" data-close aria-label="Close">✕</button>
-      <h2 id="settingsTitle">Your interests</h2>
-      <p class="muted" id="settingsIntro">Pick the topics you care about. “For you” shows only these.</p>
-      <div class="chips wrap" id="interestChips"></div>
-
-      <div class="install" id="installTip">
-        <h3>Put it on your home screen</h3>
-        <ol>
-          <li>Open this page in <b>Safari</b>.</li>
-          <li>Tap the <b>Share</b> button (square with an arrow).</li>
-          <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li>
-        </ol>
+    <!-- SETTINGS -->
+    <section class="view" data-view="settings" data-title="Settings">
+      <div class="large-title">
+        <h1>Settings</h1>
       </div>
 
-      <h3>How the likelihood works</h3>
-      <p class="muted">Every 30 minutes the app reads headlines from news sites and asks an AI to judge each rumour: who reported it, how many outlets agree, how specific it is, and whether the company has denied it. When a rumour is later confirmed or denied, it moves to the “Confirmed / denied” tab.</p>
-      <p class="muted small">These are estimates and can be wrong. Nothing here is financial advice.</p>
-      <button class="primary" data-close>Done</button>
+      <div class="group-header">Appearance</div>
+      <div class="group">
+        <div class="cell cell-seg">
+          <div class="segmented" id="themeSeg">
+            <button data-v="auto">Automatic</button>
+            <button data-v="light">Light</button>
+            <button data-v="dark">Dark</button>
+          </div>
+        </div>
+      </div>
+      <div class="group-footer">Automatic follows your iPhone’s Light/Dark setting.</div>
+
+      <div class="group-header">Your interests</div>
+      <div class="group">
+        <div class="cell cell-chips"><div class="chips wrap" id="interestChips"></div></div>
+      </div>
+      <div class="group-footer">Stories about these topics appear under “For You”.</div>
+
+      <div class="group-header">Live refresh</div>
+      <div class="group">
+        <div class="cell"><span>Status</span><span class="value" id="liveStatus">Off</span></div>
+        <div class="cell"><span>Repository</span><span class="value" id="repoName">—</span></div>
+        <div class="cell cell-input">
+          <input type="password" id="tokenInput" placeholder="Paste GitHub key (github_pat_…)" autocomplete="off" autocapitalize="off" spellcheck="false">
+        </div>
+        <button class="cell link" id="tokenSave"><span>Save key</span></button>
+        <button class="cell link danger" id="tokenRemove" hidden><span>Remove key</span></button>
+      </div>
+      <div class="group-footer">With a key, the refresh button fetches brand-new news from all sites (takes about 2–5 minutes). Without one, it reloads the latest update. The key is stored only on this device. Setup steps are in the README.</div>
+
+      <div class="group-header">App</div>
+      <div class="group">
+        <div class="cell"><span>Last update</span><span class="value" id="updatedSettings">—</span></div>
+        <div class="cell"><span>Automatic updates</span><span class="value">7:30 &amp; 17:00</span></div>
+        <div class="cell"><span>Stories</span><span class="value" id="storyCount">—</span></div>
+        <div class="cell"><span>News sources</span><span class="value" id="sourceCount">—</span></div>
+        <button class="cell link" id="clearCacheBtn"><span>Reload app</span></button>
+      </div>
+
+      <div class="group-header" id="installHeader">Add to Home Screen</div>
+      <div class="group" id="installGroup">
+        <div class="cell text">
+          <ol class="steps">
+            <li>Open this page in <b>Safari</b>.</li>
+            <li>Tap <b>Share</b> (or <b>•••</b> then Share).</li>
+            <li>Tap <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+          </ol>
+        </div>
+      </div>
+
+      <div class="group-header">How it works</div>
+      <div class="group">
+        <div class="cell text">
+          At 7:30 and 17:00 (London time) the app reads more than 40 tech, AI, gadget and finance sites. An AI reads each new article and writes a summary, key points and a full write-up in its own words, flags rumours with odds of being true, lists stocks the story could move, and puts together the Today briefing.
+        </div>
+      </div>
+      <div class="group-footer">Write-ups, odds and stock effects are AI-generated and can be wrong. Not financial advice. Always check the original article.</div>
+    </section>
+  </main>
+
+  <!-- Tab bar -->
+  <nav class="tabbar" id="tabbar">
+    <button data-tab="today" class="on" aria-label="Today">
+      <svg viewBox="0 0 28 28"><circle cx="14" cy="14" r="4.6"/><path d="M14 3.5v2.6M14 21.9v2.6M24.5 14h-2.6M6.1 14H3.5M21.4 6.6l-1.8 1.8M8.4 19.6l-1.8 1.8M21.4 21.4l-1.8-1.8M8.4 8.4 6.6 6.6"/></svg>
+      <span>Today</span>
+    </button>
+    <button data-tab="news" aria-label="News">
+      <svg viewBox="0 0 28 28"><rect x="4" y="5" width="17" height="18" rx="3"/><path d="M21 9h2a1.5 1.5 0 0 1 1.5 1.5V20a3 3 0 0 1-3 3"/><path d="M8 10h9M8 14h9M8 18h5" class="thin"/></svg>
+      <span>News</span>
+    </button>
+    <button data-tab="rumours" aria-label="Rumours">
+      <svg viewBox="0 0 28 28"><circle cx="14" cy="14" r="2.6" class="fill"/><path d="M9.5 9.5a6.4 6.4 0 0 0 0 9M18.5 9.5a6.4 6.4 0 0 1 0 9M6 6a11.3 11.3 0 0 0 0 16M22 6a11.3 11.3 0 0 1 0 16"/></svg>
+      <span>Rumours</span>
+      <i class="badge" id="rumourBadge" hidden></i>
+    </button>
+    <button data-tab="settings" aria-label="Settings">
+      <svg viewBox="0 0 28 28"><path d="M11.7 3.5h4.6l.6 3a8 8 0 0 1 2 1.2l2.9-1 2.3 4-2.3 2a8 8 0 0 1 0 2.4l2.3 2-2.3 4-2.9-1a8 8 0 0 1-2 1.2l-.6 3h-4.6l-.6-3a8 8 0 0 1-2-1.2l-2.9 1-2.3-4 2.3-2a8 8 0 0 1 0-2.4l-2.3-2 2.3-4 2.9 1a8 8 0 0 1 2-1.2z"/><circle cx="14" cy="14" r="3.2"/></svg>
+      <span>Settings</span>
+    </button>
+  </nav>
+
+  <!-- Welcome sheet -->
+  <dialog class="sheet" id="welcome">
+    <div class="sheet-grabber"></div>
+    <div class="sheet-body">
+      <img src="icons/icon-192.png" alt="" class="welcome-icon">
+      <h2>Welcome to Rumour Radar</h2>
+      <p class="secondary">A morning and evening briefing on tech, AI, gadgets and markets, every story written up in full, AI odds on rumours, and the stocks each story could move.</p>
+      <p class="label">Pick what you’re into</p>
+      <div class="chips wrap center" id="welcomeChips"></div>
+      <button class="btn-primary" id="welcomeDone">Continue</button>
     </div>
   </dialog>
 
