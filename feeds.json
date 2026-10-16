@@ -1,0 +1,15 @@
+[
+  { "name": "BBC Technology", "url": "https://feeds.bbci.co.uk/news/technology/rss.xml" },
+  { "name": "BBC Business", "url": "https://feeds.bbci.co.uk/news/business/rss.xml" },
+  { "name": "Engadget", "url": "https://www.engadget.com/rss.xml" },
+  { "name": "The Verge", "url": "https://www.theverge.com/rss/index.xml" },
+  { "name": "TechCrunch", "url": "https://techcrunch.com/feed/" },
+  { "name": "Ars Technica", "url": "https://feeds.arstechnica.com/arstechnica/index" },
+  { "name": "MacRumors", "url": "https://feeds.macrumors.com/MacRumors-All" },
+  { "name": "9to5Mac", "url": "https://9to5mac.com/feed/" },
+  { "name": "9to5Google", "url": "https://9to5google.com/feed/" },
+  { "name": "Electrek", "url": "https://electrek.co/feed/" },
+  { "name": "CNBC Tech", "url": "https://www.cnbc.com/id/19854910/device/rss/rss.html" },
+  { "name": "CNBC Top News", "url": "https://www.cnbc.com/id/100003114/device/rss/rss.html" },
+  { "name": "Google News: rumours", "url": "https://news.google.com/rss/search?q=(rumor+OR+rumour+OR+reportedly+OR+%22in+talks%22)+when:2d&hl=en-GB&gl=GB&ceid=GB:en" }
+]

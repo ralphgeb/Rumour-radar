@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Rumour Radar</title>
+  <meta name="description" content="Business and tech rumours, how likely they are, and which stocks they could move.">
+  <meta name="theme-color" content="#0a0f1c">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Radar">
+  <link rel="manifest" href="manifest.json">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="top">
+    <div class="brand">
+      <img src="icons/icon-192.png" alt="" class="logo">
+      <div>
+        <h1>Rumour Radar</h1>
+        <p class="updated" id="updated">Loading…</p>
+      </div>
+    </div>
+    <div class="top-actions">
+      <button class="icon-btn" id="refreshBtn" aria-label="Refresh">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <button class="icon-btn" id="settingsBtn" aria-label="Settings">
+        <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="16" cy="7" r="2" fill="none" stroke="currentColor" stroke-width="2"/><circle cx="10" cy="17" r="2" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <nav class="controls">
+    <div class="segmented" role="tablist" id="statusTabs">
+      <button role="tab" data-status="rumour" class="active">Rumours</button>
+      <button role="tab" data-status="resolved">Confirmed / denied</button>
+      <button role="tab" data-status="all">All</button>
+    </div>
+    <div class="row">
+      <div class="chips" id="topicChips"></div>
+      <select id="sortSel" aria-label="Sort">
+        <option value="latest">Latest</option>
+        <option value="likely">Most likely</option>
+        <option value="impact">Biggest impact</option>
+      </select>
+    </div>
+  </nav>
+
+  <main id="list" class="list" aria-live="polite"></main>
+
+  <p class="footnote">Likelihood and stock impact are AI estimates, not facts or financial advice. Always read the original sources.</p>
+
+  <!-- Story detail -->
+  <dialog id="detail" class="sheet">
+    <div class="sheet-inner">
+      <button class="close" data-close aria-label="Close">✕</button>
+      <div id="detailBody"></div>
+    </div>
+  </dialog>
+
+  <!-- Settings / onboarding -->
+  <dialog id="settings" class="sheet">
+    <div class="sheet-inner">
+      <button class="close" data-close aria-label="Close">✕</button>
+      <h2 id="settingsTitle">Your interests</h2>
+      <p class="muted" id="settingsIntro">Pick the topics you care about. “For you” shows only these.</p>
+      <div class="chips wrap" id="interestChips"></div>
+
+      <div class="install" id="installTip">
+        <h3>Put it on your home screen</h3>
+        <ol>
+          <li>Open this page in <b>Safari</b>.</li>
+          <li>Tap the <b>Share</b> button (square with an arrow).</li>
+          <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+        </ol>
+      </div>
+
+      <h3>How the likelihood works</h3>
+      <p class="muted">Every 30 minutes the app reads headlines from news sites and asks an AI to judge each rumour: who reported it, how many outlets agree, how specific it is, and whether the company has denied it. When a rumour is later confirmed or denied, it moves to the “Confirmed / denied” tab.</p>
+      <p class="muted small">These are estimates and can be wrong. Nothing here is financial advice.</p>
+      <button class="primary" data-close>Done</button>
+    </div>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>

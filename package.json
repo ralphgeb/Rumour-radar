@@ -1,0 +1,10 @@
+{
+  "name": "rumour-radar",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "News rumours, how likely they are, and which stocks they could move.",
+  "scripts": {
+    "update": "node scripts/update-news.mjs"
+  }
+}
