@@ -1,1 +1,982 @@
-{"updated":null,"stories":[]}
+{
+ "updated": "2026-10-16T16:43:11.680Z",
+ "stories": [
+  {
+   "id": "7524c167f0",
+   "status": "news",
+   "claim": "Vercel says its new Jev AI model is the fastest-adopted model on its AI gateway.",
+   "summary": "Vercel's usage data from its AI gateway shows the Jev model has been adopted faster than any previous model on the platform. The gateway is a unified API service that routes requests to many AI models.",
+   "likelihood": null,
+   "likelihood_reason": "Ordinary reported news based on platform usage data.",
+   "signals": [
+    "Reported by TechCrunch",
+    "Based on company usage data"
+   ],
+   "topics": [
+    "AI"
+   ],
+   "overall_impact": "low",
+   "stocks": [],
+   "sources": [
+    {
+     "name": "TechCrunch",
+     "title": "Jev is Vercel’s fastest-adopted AI model ever",
+     "link": "https://techcrunch.com/2026/10/16/jev-is-vercels-fastest-adopted-ai-model-ever/",
+     "published": "2026-10-16T15:33:49.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:43:11.679Z",
+   "first_published": "2026-10-16T15:33:49.000Z",
+   "last_updated": "2026-10-16T16:43:11.679Z"
+  },
+  {
+   "id": "f0ba9c0c7b",
+   "status": "news",
+   "claim": "A 28-year-old Russian man detained in Germany is accused of being part of the gang behind the 2024 Synnovis hack.",
+   "summary": "German police arrested a Russian national linked to the cyber-crime group that hit blood-test provider Synnovis, disrupting London hospitals in 2024. The arrest is a step in the investigation into that attack.",
+   "likelihood": null,
+   "likelihood_reason": "Reported arrest, not a rumour.",
+   "signals": [
+    "Reported by BBC Technology"
+   ],
+   "topics": [
+    "Other"
+   ],
+   "overall_impact": "low",
+   "stocks": [],
+   "sources": [
+    {
+     "name": "BBC Technology",
+     "title": "Russian man linked to deadly London hospitals hack arrested",
+     "link": "https://www.bbc.co.uk/news/articles/c9vgr61kml3mo?at_medium=RSS&at_campaign=rss",
+     "published": "2026-10-16T15:31:33.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:43:11.679Z",
+   "first_published": "2026-10-16T15:31:33.000Z",
+   "last_updated": "2026-10-16T16:43:11.679Z"
+  },
+  {
+   "id": "a57dabb50f",
+   "status": "news",
+   "claim": "Kia has launched a remote-driving car-sharing service in Korea using its PV5 electric van.",
+   "summary": "Kia started a car-sharing programme in Korea where vehicles can be driven remotely, using the PV5 EV van. It is a new mobility service pilot in one market.",
+   "likelihood": null,
+   "likelihood_reason": "Confirmed launch reported by Electrek.",
+   "signals": [
+    "Reported by Electrek"
+   ],
+   "topics": [
+    "Cars",
+    "Tesla & EVs"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "000270.KS",
+     "name": "Kia",
+     "direction": "up",
+     "impact": "low",
+     "reason": "New service and EV van promotes its electric lineup in Korea."
+    }
+   ],
+   "sources": [
+    {
+     "name": "Electrek",
+     "title": "Kia launches first-of-its-kind remote driving car-sharing service with the PV5 EV van",
+     "link": "https://electrek.co/2026/10/16/kia-launches-first-remote-driving-car-sharing-service-with-pv5/",
+     "published": "2026-10-16T15:15:59.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:43:11.679Z",
+   "first_published": "2026-10-16T15:15:59.000Z",
+   "last_updated": "2026-10-16T16:43:11.679Z"
+  },
+  {
+   "id": "e3727d66d7",
+   "status": "rumour",
+   "claim": "The NBA and sportsbooks are reportedly agreeing to ban some bet types, such as certain same-player under parlays.",
+   "summary": "A report says the league and sportsbooks have reached an agreement to restrict certain parlay bets. The details are reported secondhand and not yet confirmed by the parties.",
+   "likelihood": 70,
+   "likelihood_reason": "Same underlying report as the other copy; no independent confirmation.",
+   "signals": [
+    "Reported via aggregator",
+    "Duplicate of article 6",
+    "Same story in multiple outlets"
+   ],
+   "topics": [
+    "Deals & Mergers",
+    "Markets & Economy"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "DKNG",
+     "name": "DraftKings",
+     "direction": "down",
+     "impact": "medium",
+     "reason": "Restricted parlay products could reduce betting revenue."
+    },
+    {
+     "ticker": "FLUT",
+     "name": "Flutter Entertainment",
+     "direction": "down",
+     "impact": "medium",
+     "reason": "Parlay bet limits would hit its sportsbook revenue, including FanDuel."
+    }
+   ],
+   "sources": [
+    {
+     "name": "AOL.com",
+     "title": "NBA, sportsbooks reportedly agree to ban certain bets, including parlays involving the under on same player's stats",
+     "link": "https://news.google.com/rss/articles/CBMiigFBVV95cUxPVnAtVFQzZzdXc3BCZmFGMDR3UEtmX1c1WXpFaF9SZy1PTjZXOHQ4WS1UMDRoWFRtUk03YU5ucTFTQjU5Zks0ZllHWHZyRFM4T0hqN0tmYUhzY0pWdEV2UkIzUW5oenJPNnFpYUJGQV9jaFZ2UE1xMFBmRWR6RTZSdXRXVnctcXpUekE?oc=5",
+     "published": "2026-10-16T15:14:15.000Z"
+    },
+    {
+     "name": "Yahoo",
+     "title": "NBA, sportsbooks reportedly agree to ban certain bets, including parlays involving the under on same player's stats",
+     "link": "https://news.google.com/rss/articles/CBMi8gFBVV95cUxNZHRyZnlFYndWZGZyaGVLNk5pNkItZy1BYlBSdEZsc0hxeDBmQjJxRS15ZnNwZ3NxUVNhSUhlYTYzeHdSeFNXcGpRMHVHNlFqdVZBLVl0NG1iX3UtbWx5YS1iQkpGM0RXZjJHZm5lTmM3eWRfVWlfejFoTkxKNUk4ODJLZU56WkNpZnBxQjl2Uzg5VV84bWhuRjVSNWZ0ZktpaXBKb2ZKVmZOeDdKR0lySVJldE5Lc1NrMGdlR1VhSEFPSFQ0OFhRMHVEZk5qUXBpN2hPSm5pNlJTR3FPbUE3bUpDT2lxazgwS242d2lRR09xZw?oc=5",
+     "published": "2026-10-16T15:14:15.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:43:11.679Z",
+   "first_published": "2026-10-16T15:14:15.000Z",
+   "last_updated": "2026-10-16T16:43:11.679Z"
+  },
+  {
+   "id": "ae9ca32af2",
+   "status": "news",
+   "claim": "Apple announced the HomePod mini 2, a new Apple TV 4K and the $299 HomeView smart display, and reactions are mixed.",
+   "summary": "A podcast discusses Apple's recent launches, including a HomeView smart hub with a 7-inch display and Siri, priced at $299. Reception has been mixed among reviewers and commentators.",
+   "likelihood": null,
+   "likelihood_reason": "Confirmed product announcement.",
+   "signals": [
+    "Verge product analysis",
+    "Official Apple announcement"
+   ],
+   "topics": [
+    "Apple",
+    "Phones & Gadgets"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "AAPL",
+     "name": "Apple",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "New home hardware is a small addition to the product line with modest revenue effect."
+    }
+   ],
+   "sources": [
+    {
+     "name": "MacRumors",
+     "title": "The MacRumors Show: Was HomeView Worth the Wait?",
+     "link": "https://www.macrumors.com/2026/10/16/the-macrumors-show-homeview-worth-the-wait/",
+     "published": "2026-10-16T16:13:06.000Z"
+    },
+    {
+     "name": "The Verge",
+     "title": "Apple’s HomeView has an app problem",
+     "link": "https://www.theverge.com/podcast/1012911/apple-homeview-apps-carplay-vergecast",
+     "published": "2026-10-16T15:38:17.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:37.925Z",
+   "first_published": "2026-10-16T16:13:06.000Z",
+   "last_updated": "2026-10-16T16:43:03.824Z"
+  },
+  {
+   "id": "eb5e7efebc",
+   "status": "rumour",
+   "claim": "UK Chancellor Healey is reportedly weighing changes to the bank tax, while British shares hold gains.",
+   "summary": "Market roundup reporting that the UK chancellor may be considering changes to bank taxation. The report is a brief market wrap with little detail on the proposal itself.",
+   "likelihood": 40,
+   "likelihood_reason": "Same single underlying report repeated by another outlet; not independent confirmation.",
+   "signals": [
+    "Duplicate of same underlying report",
+    "Aggregator headline, original source not named",
+    "Hedged language ('reportedly weighs')"
+   ],
+   "topics": [
+    "UK business",
+    "Banks & Finance",
+    "Markets & Economy"
+   ],
+   "overall_impact": "medium",
+   "stocks": [
+    {
+     "ticker": "BARC.L",
+     "name": "Barclays",
+     "direction": "down",
+     "impact": "medium",
+     "reason": "A higher bank tax would cut UK bank profits."
+    },
+    {
+     "ticker": "LLOY.L",
+     "name": "Lloyds Banking Group",
+     "direction": "down",
+     "impact": "medium",
+     "reason": "UK-focused lender exposed to any bank levy increase."
+    },
+    {
+     "ticker": "NWG.L",
+     "name": "NatWest Group",
+     "direction": "down",
+     "impact": "medium",
+     "reason": "UK-focused lender exposed to any bank levy increase."
+    }
+   ],
+   "sources": [
+    {
+     "name": "marketscreener.com",
+     "title": "British Shares Hold Gains; Healey Reportedly Weighs Bank Tax Changes",
+     "link": "https://news.google.com/rss/articles/CBMivAFBVV95cUxNNWJsUXRzb0xfMGJ3ZU4tN2N6UzNCbnBCaGZzaF9rbkVLRFFxTkdBZ3ItZGpidVFURTJvRTNyNWoyakY4VmdHbnBHSVhwb013Slk0Sk03UnAxNHBFOU0zQTctbkRSVXZHNEx3M25QbjlLNXBlbVBWTFM5dlFJQXdLaHJsUTkyM0xCZ1cwRENxSTFvM1FlR0NGNnVjU0dlUUd1VGtaVXhINmh2YXdIZnVzMm1SM2RIeVMwTU04OA?oc=5",
+     "published": "2026-10-16T15:47:30.000Z"
+    },
+    {
+     "name": "Yahoo Finance UK",
+     "title": "British Shares Hold Gains; Healey Reportedly Weighs Bank Tax Changes",
+     "link": "https://news.google.com/rss/articles/CBMiiAFBVV95cUxOWndtOG5hTGtaODZKWmFpMl8zbDRTVkszMldVMXJ1TTNySDkzSTZYd0Z0T25EVWU3WFZGTWlTZGJDbFZMVEdSeGZXMXNZVG9VY2wzZnV3Q2VDdTR0bUpXWkV6QWtENkM5bzFqbFpFbmdidEVKYUpOMXl2cl9fWWRfS0JaVmliTkN2?oc=5",
+     "published": "2026-10-16T15:46:49.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:43:03.824Z",
+   "first_published": "2026-10-16T15:47:30.000Z",
+   "last_updated": "2026-10-16T16:43:03.824Z"
+  },
+  {
+   "id": "bad5ce326e",
+   "status": "news",
+   "claim": "Eutelsat shares rose sharply after criticism of SpaceX's Starshield service limits in Ukraine.",
+   "summary": "Eutelsat, a European satellite operator, saw its stock climb about 18% amid criticism that Starshield's limitations in Ukraine leave room for a European alternative.",
+   "likelihood": null,
+   "likelihood_reason": "Market movement report, not a rumour.",
+   "signals": [
+    "Reports share price move"
+   ],
+   "topics": [
+    "Space",
+    "Markets & Economy"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "ETL.PA",
+     "name": "Eutelsat",
+     "direction": "up",
+     "impact": "medium",
+     "reason": "Investor interest in a European SpaceX rival rose on Starshield criticism."
+    }
+   ],
+   "sources": [
+    {
+     "name": "CNBC Tech",
+     "title": "Europe's answer to SpaceX rises 18% as Ukraine's Starshield limits raise concerns",
+     "link": "https://www.cnbc.com/2026/10/16/eutelsat-starshield-ukraine-spacex.html",
+     "published": "2026-10-16T15:45:35.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:43:03.824Z",
+   "first_published": "2026-10-16T15:45:35.000Z",
+   "last_updated": "2026-10-16T16:43:03.824Z"
+  },
+  {
+   "id": "1b25de0981",
+   "status": "news",
+   "claim": "A SpaceX AI policy executive faced questions from New York City Council about Grok safety and sexualized images.",
+   "summary": "A SpaceX government affairs executive was questioned by NYC Council members about safety concerns with the Grok AI model, including sexualized image generation.",
+   "likelihood": null,
+   "likelihood_reason": "Reported event, not a rumour.",
+   "signals": [
+    "Reported hearing"
+   ],
+   "topics": [
+    "AI",
+    "Other"
+   ],
+   "overall_impact": "low",
+   "stocks": [],
+   "sources": [
+    {
+     "name": "CNBC Tech",
+     "title": "SpaceX AI policy leader grilled by NYC Council on Grok safety, sexualized images",
+     "link": "https://www.cnbc.com/2026/10/16/spacex-policy-manger-to-testify-in-nyc-council-ai-safety-investigation.html",
+     "published": "2026-10-16T15:44:51.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:43:03.824Z",
+   "first_published": "2026-10-16T15:44:51.000Z",
+   "last_updated": "2026-10-16T16:43:03.824Z"
+  },
+  {
+   "id": "8986d62571",
+   "status": "news",
+   "claim": "Russia struck nine Ukrainian regions as a report showed rising civilian casualties.",
+   "summary": "Russian strikes hit multiple Ukrainian regions, with a new report documenting a jump in civilian deaths and injuries. This is geopolitical news with little direct market relevance.",
+   "likelihood": null,
+   "likelihood_reason": "Reported event.",
+   "signals": [
+    "Wire service (AP)"
+   ],
+   "topics": [
+    "Other"
+   ],
+   "overall_impact": "none",
+   "stocks": [],
+   "sources": [
+    {
+     "name": "AP News",
+     "title": "Russia strikes 9 Ukrainian regions as a new report shows a spike in civilian casualties",
+     "link": "https://news.google.com/rss/articles/CBMiqAFBVV95cUxQUkhGZ3BTcW9RNmZaUXE3TVR3czBVeGlhS3NuYXlyZ1NxU1BpXy16emxHOGRPQ3BKZGM0cVFCWDdFeWpsRnVydHI3dFRYaThlSXI4VVVuMGVLa2xCZnJDdUxxbDNrT1gzd3ZYQUV3VERhZl9fWFlhRHo4N2VEYUUwWldBUGlzcWlxc1FhVWFNdnNsb2xVOS1JbU5EV2QtUXhET2VWT0ozeXU?oc=5",
+     "published": "2026-10-16T15:38:00.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:43:03.824Z",
+   "first_published": "2026-10-16T15:38:00.000Z",
+   "last_updated": "2026-10-16T16:43:03.824Z"
+  },
+  {
+   "id": "6f0ec75f9d",
+   "status": "news",
+   "claim": "Startup Elorian has launched Glimpse, its first AI model that reasons over images, which it says beats GPT-6 Astra on some chart and video tasks.",
+   "summary": "A new AI startup, Elorian, unveiled its first model focused on visual reasoning. Its self-reported benchmarks claim it beats a rival model on scientific chart reasoning and video captioning, though these are the company's own evaluations.",
+   "likelihood": null,
+   "likelihood_reason": "Ordinary product news, not a rumour.",
+   "signals": [
+    "Company's own evaluations, not independently verified"
+   ],
+   "topics": [
+    "AI"
+   ],
+   "overall_impact": "low",
+   "stocks": [],
+   "sources": [
+    {
+     "name": "TechCrunch",
+     "title": "Elorian’s first AI model wants to reason with images, not just about them",
+     "link": "https://techcrunch.com/2026/10/16/elorians-first-ai-model-wants-to-reason-with-images-not-just-about-them/",
+     "published": "2026-10-16T16:01:37.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:55.245Z",
+   "first_published": "2026-10-16T16:01:37.000Z",
+   "last_updated": "2026-10-16T16:42:55.245Z"
+  },
+  {
+   "id": "40a686a264",
+   "status": "news",
+   "claim": "Startup Tressfecta has launched Plait Pilot, a tool to help hairstylists separate hair before braiding.",
+   "summary": "A small company built a consumer-style tool for textured hair braiding. It is a niche product launch with no notable market relevance.",
+   "likelihood": null,
+   "likelihood_reason": "Ordinary product news.",
+   "signals": [
+    "Startup product launch"
+   ],
+   "topics": [
+    "Phones & Gadgets",
+    "Retail"
+   ],
+   "overall_impact": "none",
+   "stocks": [],
+   "sources": [
+    {
+     "name": "TechCrunch",
+     "title": "Tressfecta wants to make hair braiding a less arduous task for hairstylists",
+     "link": "https://techcrunch.com/2026/10/16/tressfecta-wants-to-make-hair-braiding-a-less-arduous-task-for-hairstylists/",
+     "published": "2026-10-16T16:00:00.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:55.245Z",
+   "first_published": "2026-10-16T16:00:00.000Z",
+   "last_updated": "2026-10-16T16:42:55.245Z"
+  },
+  {
+   "id": "9d9d7a85c1",
+   "status": "news",
+   "claim": "Nathan Fielder's documentary about Elizabeth Holmes, 'You Can See Everything', is reviewed as a meditation on authenticity.",
+   "summary": "This is an arts and culture review of a documentary about the former Theranos CEO. It has no direct business or market relevance.",
+   "likelihood": null,
+   "likelihood_reason": "Review, not a business claim.",
+   "signals": [],
+   "topics": [
+    "Streaming & Media"
+   ],
+   "overall_impact": "none",
+   "stocks": [],
+   "sources": [
+    {
+     "name": "TechCrunch",
+     "title": "In ‘You Can See Everything,’ Elizabeth Holmes meets her equal in comedian Nathan Fielder",
+     "link": "https://techcrunch.com/2026/10/16/in-you-can-see-everything-elizabeth-holmes-meets-her-equal-in-comedian-nathan-fielder/",
+     "published": "2026-10-16T16:00:00.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:55.245Z",
+   "first_published": "2026-10-16T16:00:00.000Z",
+   "last_updated": "2026-10-16T16:42:55.245Z"
+  },
+  {
+   "id": "fe021b783b",
+   "status": "news",
+   "claim": "A reviewer finds the iPhone 18 Pro's wider variable aperture makes a small but visible difference in Night mode photos.",
+   "summary": "A hands-on camera test of the iPhone 18 Pro's variable aperture in night photography. It is product review content with modest news value.",
+   "likelihood": null,
+   "likelihood_reason": "Product review, not a rumour.",
+   "signals": [
+    "Single reviewer's hands-on test"
+   ],
+   "topics": [
+    "Apple",
+    "Phones & Gadgets"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "AAPL",
+     "name": "Apple",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "Camera feature review has minimal effect on sales expectations."
+    }
+   ],
+   "sources": [
+    {
+     "name": "9to5Mac",
+     "title": "Here’s the difference the variable aperture of the iPhone 18 Pro makes at night",
+     "link": "https://9to5mac.com/2026/10/16/heres-the-difference-the-variable-aperture-of-the-iphone-18-pro-makes-at-night/",
+     "published": "2026-10-16T16:00:00.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:55.245Z",
+   "first_published": "2026-10-16T16:00:00.000Z",
+   "last_updated": "2026-10-16T16:42:55.245Z"
+  },
+  {
+   "id": "a4d2d7f7da",
+   "status": "news",
+   "claim": "Tesla has unveiled its long-delayed Roadster, developed with SpaceX, prompting speculation about a Tesla-SpaceX merger.",
+   "summary": "Tesla showed off the Roadster refresh that Musk first previewed in 2017, after repeatedly missing delivery targets. The reveal has fueled speculation about closer ties or a merger with SpaceX, which is a claim that remains unconfirmed.",
+   "likelihood": null,
+   "likelihood_reason": "The unveiling is confirmed news; merger talk is speculation only and not rated here.",
+   "signals": [
+    "Product unveiling confirmed",
+    "Merger speculation unconfirmed"
+   ],
+   "topics": [
+    "Tesla & EVs",
+    "Cars",
+    "Space"
+   ],
+   "overall_impact": "medium",
+   "stocks": [
+    {
+     "ticker": "TSLA",
+     "name": "Tesla",
+     "direction": "mixed",
+     "impact": "medium",
+     "reason": "Roadster reveal may lift interest but past delivery delays weigh on credibility."
+    }
+   ],
+   "sources": [
+    {
+     "name": "CNBC Tech",
+     "title": "Tesla unveils long-delayed Roadster developed with SpaceX, fueling merger speculation",
+     "link": "https://www.cnbc.com/2026/10/15/tesla-roadster-reveal-what-to-know-about-the-delayed-ev.html",
+     "published": "2026-10-16T15:52:41.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:55.245Z",
+   "first_published": "2026-10-16T15:52:41.000Z",
+   "last_updated": "2026-10-16T16:42:55.245Z"
+  },
+  {
+   "id": "a7e671bfba",
+   "status": "news",
+   "claim": "Sickle cell gene therapies are approved but face cost and access barriers that slow their uptake.",
+   "summary": "A feature on sickle cell gene therapies, noting that approval has not translated into wide use because of price and access issues. It describes an ongoing industry challenge rather than a new event.",
+   "likelihood": null,
+   "likelihood_reason": "Feature article, not a rumour.",
+   "signals": [],
+   "topics": [
+    "Health & Biotech"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "VRTX",
+     "name": "Vertex Pharmaceuticals",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "Vertex markets a sickle cell gene therapy whose uptake depends on cost and access."
+    }
+   ],
+   "sources": [
+    {
+     "name": "CNBC Top News",
+     "title": "Sickle cell gene therapies offer new hope, but access remains a major challenge",
+     "link": "https://www.cnbc.com/2026/10/16/sickle-cell-gene-therapies-offer-new-hope-accessing-them-is-hard.html",
+     "published": "2026-10-16T15:50:15.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:55.245Z",
+   "first_published": "2026-10-16T15:50:15.000Z",
+   "last_updated": "2026-10-16T16:42:55.245Z"
+  },
+  {
+   "id": "8ab883c7b7",
+   "status": "news",
+   "claim": "Apple will add three features to the existing HomePod 2 through a free software update.",
+   "summary": "Apple's new home lineup announcement included a software update for the current HomePod, bringing three new features at no cost. No new full-size HomePod was launched.",
+   "likelihood": null,
+   "likelihood_reason": "Confirmed Apple announcement.",
+   "signals": [
+    "Official Apple announcement"
+   ],
+   "topics": [
+    "Apple",
+    "Phones & Gadgets"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "AAPL",
+     "name": "Apple",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "Free software update is a minor engagement boost for the existing product line."
+    }
+   ],
+   "sources": [
+    {
+     "name": "9to5Mac",
+     "title": "HomePod is about to get free upgrade with these new features",
+     "link": "https://9to5mac.com/2026/10/16/homepod-is-about-to-get-free-upgrade-with-these-new-features/",
+     "published": "2026-10-16T15:49:06.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:55.245Z",
+   "first_published": "2026-10-16T15:49:06.000Z",
+   "last_updated": "2026-10-16T16:42:55.245Z"
+  },
+  {
+   "id": "2190fc7093",
+   "status": "news",
+   "claim": "Older Americans feel less affordability pressure than younger ones, a gap that could shape the 2026 midterms.",
+   "summary": "A CNBC piece says younger Americans face steeper inflation and housing costs than baby boomers, widening an affordability divide ahead of the midterms. It is a political and economic trend story rather than a company-specific development.",
+   "likelihood": null,
+   "likelihood_reason": "Ordinary news analysis, not a rumour.",
+   "signals": [
+    "Reputable outlet: CNBC"
+   ],
+   "topics": [
+    "Markets & Economy"
+   ],
+   "overall_impact": "none",
+   "stocks": [],
+   "sources": [
+    {
+     "name": "CNBC Top News",
+     "title": "Older Americans feel less of the affordability crunch. How that could affect the midterm elections",
+     "link": "https://www.cnbc.com/2026/10/16/affordability-inflation-midterms.html",
+     "published": "2026-10-16T16:12:41.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:47.211Z",
+   "first_published": "2026-10-16T16:12:41.000Z",
+   "last_updated": "2026-10-16T16:42:47.211Z"
+  },
+  {
+   "id": "db538fe090",
+   "status": "news",
+   "claim": "A US Treasury official says Washington raised market access problems for Mastercard and Citigroup in China at Bangkok talks.",
+   "summary": "Same CNBC report, republished on the main CNBC feed. It covers US pressure on China over access for two American financial firms.",
+   "likelihood": null,
+   "likelihood_reason": "Ordinary news report.",
+   "signals": [
+    "Named official source: US Treasury official",
+    "Reputable outlet: CNBC"
+   ],
+   "topics": [
+    "Banks & Finance",
+    "Deals & Mergers"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "MA",
+     "name": "Mastercard",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "China market access could affect its international growth."
+    },
+    {
+     "ticker": "C",
+     "name": "Citigroup",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "China access restrictions could limit its overseas business."
+    }
+   ],
+   "sources": [
+    {
+     "name": "CNBC",
+     "title": "U.S. raises Mastercard, Citigroup China market access in bilateral Bangkok talks, official says",
+     "link": "https://news.google.com/rss/articles/CBMihwFBVV95cUxOblUzY256QVA2WUoxcVhPa2lKenVxd0JTZjRURFlvbmo1VHVkbnpka1o2Q1N1cTV5Zk80NnNVdkRNemJCN2VBZk5nM1FUbnc1T2dTMTJUTy1xenY4X015bEQxSS1mVnBuTmtyTUNPbV91Z3JabndubU9LOWNLSmJrYzg5cVViYW_SAYwBQVVfeXFMUF9IYWo2bU9xUUNEV01UM2JyR19BTFVHRGljTjc5dExwazFlSjBSSHdvRHVrUi1VR3RxOGFvZTB1TzVZOGVlZnNyNUlQVW9HZWJOdHA3eGFGTW9XcmJ5bmdZcjA4aTRZRmJXZEFKU0VZdENUa25adFFsLTc1RzNHSDBxT1l0VW5oTEpWRlU?oc=5",
+     "published": "2026-10-16T16:11:09.000Z"
+    },
+    {
+     "name": "CNBC Top News",
+     "title": "U.S. raises Mastercard, Citigroup China market access in bilateral Bangkok talks, official says",
+     "link": "https://www.cnbc.com/2026/10/16/us-china-mastercard-citigroup-market-access.html",
+     "published": "2026-10-16T16:11:09.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:47.211Z",
+   "first_published": "2026-10-16T16:11:09.000Z",
+   "last_updated": "2026-10-16T16:42:47.211Z"
+  },
+  {
+   "id": "0fdf41ace0",
+   "status": "news",
+   "claim": "Apple's foldable iPhone Duo has reportedly been delayed into 2027, with pre-orders having just opened.",
+   "summary": "A 9to5Google article says the iPhone Duo faces months of delay, pushing availability into 2027, and suggests Android foldables as alternatives. The delay claim is reported as fact but comes from a secondary tech outlet.",
+   "likelihood": null,
+   "likelihood_reason": "Reported as settled news; no primary source cited in the snippet.",
+   "signals": [
+    "Single tech outlet",
+    "Snippet describes delay as established"
+   ],
+   "topics": [
+    "Apple",
+    "Phones & Gadgets"
+   ],
+   "overall_impact": "medium",
+   "stocks": [
+    {
+     "ticker": "AAPL",
+     "name": "Apple",
+     "direction": "down",
+     "impact": "medium",
+     "reason": "A delayed foldable would push back a potential premium product cycle."
+    },
+    {
+     "ticker": "005930.KS",
+     "name": "Samsung Electronics",
+     "direction": "up",
+     "impact": "low",
+     "reason": "Delays for Apple's foldable could leave more of the market to Samsung's foldables."
+    }
+   ],
+   "sources": [
+    {
+     "name": "9to5Google",
+     "title": "iPhone Duo orders are delayed into 2027; here are the Android foldables you should try instead",
+     "link": "https://9to5google.com/2026/10/16/iphone-duo-pre-order-delay-android-foldable-alternatives/",
+     "published": "2026-10-16T16:10:00.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:47.211Z",
+   "first_published": "2026-10-16T16:10:00.000Z",
+   "last_updated": "2026-10-16T16:42:47.211Z"
+  },
+  {
+   "id": "3b83b2b77e",
+   "status": "news",
+   "claim": "Waymo plans to begin testing its robotaxis on Toronto streets, expanding into Canada.",
+   "summary": "Waymo is reportedly starting with testing in Toronto as a first step into Canada. It is an incremental expansion of its autonomous ride-hailing business.",
+   "likelihood": null,
+   "likelihood_reason": "Company-stated plan, reported as news.",
+   "signals": [
+    "Reputable outlet: TechCrunch"
+   ],
+   "topics": [
+    "Tesla & EVs",
+    "AI",
+    "Cars"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "GOOGL",
+     "name": "Alphabet",
+     "direction": "up",
+     "impact": "low",
+     "reason": "Waymo is Alphabet's autonomous driving unit, and expansion supports its growth story."
+    },
+    {
+     "ticker": "UBER",
+     "name": "Uber",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "Robotaxi expansion could compete with or partner with ride-hailing platforms."
+    }
+   ],
+   "sources": [
+    {
+     "name": "TechCrunch",
+     "title": "Waymo’s robotaxis are headed to Canada",
+     "link": "https://techcrunch.com/2026/10/16/waymos-robotaxis-are-headed-to-canada/",
+     "published": "2026-10-16T16:06:38.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:47.211Z",
+   "first_published": "2026-10-16T16:06:38.000Z",
+   "last_updated": "2026-10-16T16:42:47.211Z"
+  },
+  {
+   "id": "2bab6421b0",
+   "status": "news",
+   "claim": "Amazon has issued the first discount on Apple's new Apple TV 4K, which ships November 13.",
+   "summary": "Amazon is discounting the new Apple TV 4K days after announcing it, and also discounted Apple's new smart display. The price cut is small, but it signals retail pricing pressure on new Apple hardware.",
+   "likelihood": null,
+   "likelihood_reason": "Confirmed retail pricing news.",
+   "signals": [
+    "Reputable outlet: The Verge"
+   ],
+   "topics": [
+    "Apple",
+    "Retail",
+    "Phones & Gadgets"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "AAPL",
+     "name": "Apple",
+     "direction": "down",
+     "impact": "low",
+     "reason": "Early retailer discounts may hint at soft demand for the new streaming box."
+    },
+    {
+     "ticker": "AMZN",
+     "name": "Amazon",
+     "direction": "up",
+     "impact": "low",
+     "reason": "Discounting Apple hardware draws shoppers to Amazon's retail platform."
+    }
+   ],
+   "sources": [
+    {
+     "name": "The Verge",
+     "title": "The new Apple TV 4K just got its first (very small) discount",
+     "link": "https://www.theverge.com/gadgets/1012962/apple-tv-4k-fourth-generation-fanttik-s1-pro-deal-sale",
+     "published": "2026-10-16T16:02:22.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:47.211Z",
+   "first_published": "2026-10-16T16:02:22.000Z",
+   "last_updated": "2026-10-16T16:42:47.211Z"
+  },
+  {
+   "id": "2ff15e973f",
+   "status": "news",
+   "claim": "A HomeView license agreement on Apple's legal site calls the device a 'HomePodDevice', apparently a leftover placeholder name.",
+   "summary": "A legal document tied to Apple's HomeView smart display uses the name 'HomePodDevice', along with HomePodOS agreement titles. The writer reads this as a leftover draft name that reveals the device's HomePod lineage.",
+   "likelihood": null,
+   "likelihood_reason": "Based on a documented observation of existing public text, not a forecast.",
+   "signals": [
+    "Based on publicly posted legal text",
+    "Interpretation of a placeholder name is speculative"
+   ],
+   "topics": [
+    "Apple",
+    "Phones & Gadgets"
+   ],
+   "overall_impact": "none",
+   "stocks": [
+    {
+     "ticker": "AAPL",
+     "name": "Apple",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "Minor naming detail with no clear financial effect."
+    }
+   ],
+   "sources": [
+    {
+     "name": "MacRumors",
+     "title": "Apple Refers to HomeView as 'HomePodDevice' in Legal Document",
+     "link": "https://www.macrumors.com/2026/10/16/apple-homeview-homepoddevice/",
+     "published": "2026-10-16T16:39:26.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:37.925Z",
+   "first_published": "2026-10-16T16:39:26.000Z",
+   "last_updated": "2026-10-16T16:42:37.925Z"
+  },
+  {
+   "id": "7ab7e4466b",
+   "status": "news",
+   "claim": "Opinion piece arguing tech firms should offer cheap battery replacements while memory shortages persist.",
+   "summary": "An opinion piece suggests that device makers should offer low-cost battery swaps if memory chip shortages continue, to extend device life. It is a commentary rather than a news event.",
+   "likelihood": null,
+   "likelihood_reason": "Opinion, no forecast of a company action.",
+   "signals": [
+    "Opinion piece"
+   ],
+   "topics": [
+    "Phones & Gadgets",
+    "Chips"
+   ],
+   "overall_impact": "none",
+   "stocks": [],
+   "sources": [
+    {
+     "name": "Engadget",
+     "title": "If memory shortages last, tech companies should offer cheap battery replacements",
+     "link": "https://www.engadget.com/2288908/if-memory-shortages-last-tech-companies-should-offer-cheap-battery-replacements/",
+     "published": "2026-10-16T16:32:00.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:37.925Z",
+   "first_published": "2026-10-16T16:32:00.000Z",
+   "last_updated": "2026-10-16T16:42:37.925Z"
+  },
+  {
+   "id": "1f9b468e86",
+   "status": "news",
+   "claim": "A former Nvidia robotics marketing leader says robotics is still in an early building-block phase before a breakthrough moment.",
+   "summary": "An interview with a venture capitalist and former Nvidia product marketing lead argues robotics still lacks core components and standards. It contrasts this with views that foundation models will soon drive a breakthrough.",
+   "likelihood": null,
+   "likelihood_reason": "Expert opinion, not a forecast of a corporate event.",
+   "signals": [
+    "Industry expert opinion"
+   ],
+   "topics": [
+    "AI",
+    "Nvidia"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "NVDA",
+     "name": "Nvidia",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "General commentary on robotics maturity with no direct financial catalyst."
+    }
+   ],
+   "sources": [
+    {
+     "name": "TechCrunch",
+     "title": "A Nvidia insider-turned-VC on why robotics hasn’t hit its ChatGPT moment, yet",
+     "link": "https://techcrunch.com/video/a-nvidia-insider-turned-vc-on-why-robotics-hasnt-hit-its-chatgpt-moment-yet/",
+     "published": "2026-10-16T16:30:00.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:37.925Z",
+   "first_published": "2026-10-16T16:30:00.000Z",
+   "last_updated": "2026-10-16T16:42:37.925Z"
+  },
+  {
+   "id": "fd2c48c945",
+   "status": "news",
+   "claim": "The US Director of National Intelligence says AI amplifies cybersecurity risks, citing a case involving a Saudi national and OpenAI.",
+   "summary": "The DNI said on television that AI increases existing threats to US digital infrastructure and pointed to a case involving OpenAI as an example of threats to American AI leadership.",
+   "likelihood": null,
+   "likelihood_reason": "Official statement about existing risks, not a forecast.",
+   "signals": [
+    "Official government statement"
+   ],
+   "topics": [
+    "AI",
+    "Other"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "MSFT",
+     "name": "Microsoft",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "Broad AI security concerns could affect cloud and AI providers, though impact is indirect."
+    }
+   ],
+   "sources": [
+    {
+     "name": "CNBC Tech",
+     "title": "OpenAI Saudi national bugging case shows threat to U.S. leadership in AI: DNI Clayton",
+     "link": "https://www.cnbc.com/2026/10/16/ai-espionage-openai-jay-clayton.html",
+     "published": "2026-10-16T16:27:44.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:37.925Z",
+   "first_published": "2026-10-16T16:27:44.000Z",
+   "last_updated": "2026-10-16T16:42:37.925Z"
+  },
+  {
+   "id": "1e6bd29061",
+   "status": "rumour",
+   "claim": "Analysts expect the Fed to hold rates in October, but new chair Kevin Warsh could produce a surprise.",
+   "summary": "Market analysis says most investors expect a Fed hold in October, while Warsh's unconventional communication approach and inflation worries make the outcome uncertain. It is commentary on expectations, not a confirmed decision.",
+   "likelihood": 50,
+   "likelihood_reason": "Analyst expectation about a future central bank decision; uncertainty is inherent.",
+   "signals": [
+    "Analysis piece",
+    "Based on market expectations"
+   ],
+   "topics": [
+    "Markets & Economy",
+    "Banks & Finance"
+   ],
+   "overall_impact": "medium",
+   "stocks": [
+    {
+     "ticker": "SPY",
+     "name": "SPDR S&P 500 ETF",
+     "direction": "mixed",
+     "impact": "medium",
+     "reason": "Rate decision expectations drive broad equity market moves."
+    }
+   ],
+   "sources": [
+    {
+     "name": "CNBC Top News",
+     "title": "Analysis: Everyone expects the Fed to hold rates in October. Kevin Warsh could surprise us all",
+     "link": "https://www.cnbc.com/2026/10/16/kevin-warsh-fed-october-rate-hike-interest-rates-markets.html",
+     "published": "2026-10-16T16:27:31.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:37.925Z",
+   "first_published": "2026-10-16T16:27:31.000Z",
+   "last_updated": "2026-10-16T16:42:37.925Z"
+  },
+  {
+   "id": "ff57145677",
+   "status": "news",
+   "claim": "Trump-aligned groups and Elon Musk have spent heavily on the midterms, but the spending has had little effect on polls.",
+   "summary": "Political analysis says large GOP-aligned spending, including Musk-backed money, has not noticeably moved polling or the electoral map. It is political reporting with limited direct market relevance.",
+   "likelihood": null,
+   "likelihood_reason": "Reported analysis of existing events.",
+   "signals": [
+    "Analysis of reported spending figures"
+   ],
+   "topics": [
+    "Other"
+   ],
+   "overall_impact": "low",
+   "stocks": [
+    {
+     "ticker": "TSLA",
+     "name": "Tesla",
+     "direction": "mixed",
+     "impact": "low",
+     "reason": "Musk's political activity can affect investor sentiment toward Tesla."
+    }
+   ],
+   "sources": [
+    {
+     "name": "CNBC Top News",
+     "title": "Why Trump and the GOP's billion-dollar midterm blitz isn’t working",
+     "link": "https://www.cnbc.com/2026/10/16/republicans-midterms-spending-trump-musk-2026.html",
+     "published": "2026-10-16T16:18:13.000Z"
+    }
+   ],
+   "first_seen": "2026-10-16T16:42:37.925Z",
+   "first_published": "2026-10-16T16:18:13.000Z",
+   "last_updated": "2026-10-16T16:42:37.925Z"
+  }
+ ],
+ "model": "claude-haiku-5-5"
+}
