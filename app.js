@@ -7,9 +7,11 @@
     'Chips', 'Phones & Gadgets', 'Computers', 'Gaming', 'Software & Apps', 'Cybersecurity',
     'Streaming & Media', 'Social media', 'Startups & VC', 'Crypto', 'Markets & Economy',
     'Banks & Finance', 'Deals & Mergers', 'Policy & Regulation', 'Energy', 'Cars', 'Space',
-    'Science', 'Health & Biotech', 'Retail', 'Telecoms', 'UK business'
+    'Science', 'Health & Biotech', 'Retail', 'Telecoms', 'UK business',
+    'World politics', 'Conflict & security', 'Elections', 'Trade & tariffs', 'Central banks',
+    'Commodities', 'Climate'
   ];
-  const SECTIONS = [['all', 'All'], ['foryou', 'For You'], ['Tech', 'Tech'], ['AI', 'AI'], ['Gadgets', 'Gadgets'], ['Markets', 'Markets']];
+  const SECTIONS = [['all', 'All'], ['foryou', 'For You'], ['Tech', 'Tech'], ['Finance', 'Finance'], ['World', 'World']];
   const IMPACT = { none: 0, low: 1, medium: 2, high: 3 };
   const ARROW = { up: '▲', down: '▼', mixed: '◆' };
   const PAGE_SIZE = 40;
@@ -64,7 +66,7 @@
   // story accessors (older stories may be missing newer fields)
   const headline = (s) => s.headline || s.sources?.[0]?.title || s.claim || '';
   const imageOf = (s) => safeUrl(s.image) || safeUrl((s.sources || []).find((x) => safeUrl(x.image))?.image);
-  const sectionOf = (s) => s.section || 'Tech';
+  const sectionOf = (s) => (/^(markets|finance)$/i.test(s.section || '') ? 'Finance' : /^world$/i.test(s.section || '') ? 'World' : 'Tech');
   const pubTime = (s) => s.first_published || s.first_seen || s.last_updated || '';
   const updTime = (s) => s.last_updated || s.first_seen || '';
   const lead = (s) => s.sources?.[0] || { name: '', link: '' };
@@ -212,7 +214,7 @@
         toast(updated && updated !== before ? 'New stories loaded' : `You’re up to date · next update ${nextUpdateLabel()}`);
         return;
       }
-      toast('Fetching the latest news from 40+ sites. This takes a few minutes.', 4500);
+      toast('Fetching the latest news from 60+ sites. This takes a few minutes.', 4500);
       const gh = github(token, repo);
       const wf = await findWorkflow(gh);
       const t0 = Date.now();
@@ -262,13 +264,13 @@
   function renderToday() {
     const eds = briefing.editions || [];
     const ed = eds[state.edition] || eds[0];
-    $('#todayEyebrow').textContent = ed ? `${ed.edition} briefing · ${londonDay(ed.generated, { weekday: 'long', day: 'numeric', month: 'long' })}` : londonDay(new Date().toISOString());
+    $('#todayEyebrow').textContent = ed ? `${ed.edition} tech briefing · ${londonDay(ed.generated, { weekday: 'long', day: 'numeric', month: 'long' })}` : londonDay(new Date().toISOString());
 
     if (!ed) {
       // No briefing written yet: show the biggest stories so far.
       if (!stories.length) { $('#todayBody').innerHTML = empty('☀️', 'Your first briefing is on its way', `Briefings arrive at 7:30 and 17:00 London time. The next one is ${nextUpdateLabel()}.`); return; }
-      const top = [...stories].sort((a, b) => storyScore(b) - storyScore(a)).slice(0, 6);
-      $('#todayBody').innerHTML = `<p class="next" style="margin-top:0">Your first full briefing arrives ${esc(nextUpdateLabel())}. Here are the biggest stories so far.</p>
+      const top = stories.filter((s) => sectionOf(s) === 'Tech').sort((a, b) => storyScore(b) - storyScore(a)).slice(0, 6);
+      $('#todayBody').innerHTML = `<p class="next" style="margin-top:0">Your first full tech briefing arrives ${esc(nextUpdateLabel())}. Here are the biggest tech stories so far.</p>
         ${top.map((s, i) => topCard(s, i + 1, headline(s), s.summary)).join('')}`;
       return;
     }
@@ -282,7 +284,7 @@
       <a class="cover sec-${esc(coverStory ? sectionOf(coverStory) : 'Tech')}" href="#" ${coverStory ? `data-story="${esc(coverStory.id)}"` : ''}>
         ${media(coverStory)}
         <div class="over">
-          <span class="edition">${ed.edition === 'Morning' ? '☀︎' : '☾'} ${esc(ed.edition)} briefing</span>
+          <span class="edition">${ed.edition === 'Morning' ? '☀︎' : '☾'} ${esc(ed.edition)} tech briefing</span>
           <h2>${esc(ed.title)}</h2>
           <div class="cmeta">${ed.story_count || stories.length} stories reviewed · ${esc(time)}</div>
         </div>

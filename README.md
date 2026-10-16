@@ -1,6 +1,6 @@
 # Rumour Radar
 
-Your morning and evening briefing on tech, AI, gadgets and markets, as an iPhone app. It reads more than 40 news sites. Every story gets its picture, an AI summary with key points, and a full write-up in the AI's own words, plus the stocks it could move. Rumours get their own tab with AI odds on how likely each one is to be true.
+Your morning and evening briefing on tech, AI, gadgets and markets, as an iPhone app. It reads more than 60 tech, finance and world news sites. Every story gets its picture, an AI summary with key points, and a full write-up in the AI's own words, plus the stocks it could move. Rumours get their own tab with AI odds on how likely each one is to be true.
 
 ## Already using an older version? Update in about 10 minutes
 
@@ -149,7 +149,7 @@ Now tapping refresh shows **Refreshing •••** while GitHub collects and ana
 
 The app has four tabs along the bottom.
 
-- **Today** is your front page. Briefings arrive at 7:30 (Morning) and 17:00 (Evening), London time. Each one has:
+- **Today** is your tech front page. Briefings arrive at 7:30 (Morning) and 17:00 (Evening), London time. Each one has:
   - a cover headline and an overview of what happened
   - the top stories with pictures
   - **Rumour watch**
@@ -157,8 +157,12 @@ The app has four tabs along the bottom.
   - **In brief**
 
   Earlier briefings are at the bottom.
-- **News** has every story from all the sites, newest first.
-  - Filter with **All**, **For You** (your interests), **Tech**, **AI**, **Gadgets** or **Markets**.
+- **News** has every story from all the sites, newest first. Filter it with:
+  - **All**
+  - **For You** (your interests)
+  - **Tech** (gadgets, AI, companies, startups and VC)
+  - **Finance** (Bloomberg, FT, Telegraph, WSJ, Washington Post and more)
+  - **World** (BBC, Guardian, Sky, Al Jazeera, NYT, Google News top stories and more)
 - **Rumours** shows unconfirmed stories with the AI's odds that each one is true:
   - green: likely
   - amber: toss-up
@@ -186,7 +190,7 @@ To change a file, open it on GitHub, click the **pencil** icon to edit, then **C
 
 - **Add or remove news sites:** edit `feeds.json`. Each line has three parts:
   - the site's name
-  - its section (`Tech`, `AI`, `Gadgets` or `Markets`)
+  - its section (`Tech`, `Finance` or `World`)
   - its RSS feed address
 - **Smarter but pricier AI:** in `.github/workflows/update-news.yml`, under `ANTHROPIC_API_KEY: ...`, add a line `ANTHROPIC_MODEL: claude-sonnet-5-5` with the same indentation.
 - **Different update times:** these are set in `.github/workflows/update-news.yml`. GitHub only understands UTC, so each London time is listed twice (summer and winter). Ask Claude to change them for you.

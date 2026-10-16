@@ -1,20 +1,28 @@
 // Rumour Radar — news collector.
 // Runs at 7:30 and 17:00 London time on GitHub Actions (and whenever you tap
 // refresh in the app). It:
-//   1. reads every RSS feed listed in feeds.json (tech, AI, gadgets, markets)
-//   2. opens each new article to find its picture and read its text
-//   3. asks Claude to write a summary, key points and a full write-up of each
+//   1. reads every RSS feed listed in feeds.json (Tech, Finance and World)
+//   2. a quick, cheap pass over the headlines only: drops junk and groups
+//      articles about the same event, so each story is analysed once
+//   3. opens each remaining article to find its picture and read its text
+//   4. asks Claude to write a summary, key points and a full write-up of each
 //      story in its own words, flag rumours with how likely they are to be
 //      true, and list the stocks the story could move
-//   4. merges stories reported by several outlets into one
-//   5. writes the morning / evening briefing for the Today tab
+//   5. writes the morning / evening tech briefing for the Today tab
 //   6. saves everything to data/news.json and data/briefing.json
+//
+// To keep it fast and cheap it uses Claude Haiku (the fastest, lowest-cost
+// model), reuses the cached instructions between requests, and runs several
+// requests at once.
 //
 // You normally never need to touch this file. Settings you might change:
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5';
 const BRIEFING_MODEL = process.env.BRIEFING_MODEL || MODEL;
-const MAX_NEW_PER_RUN = Number(process.env.MAX_NEW_PER_RUN || 150); // caps API cost per run
-const BATCH_SIZE = 6;          // articles per AI request
+const MAX_NEW_PER_RUN = Number(process.env.MAX_NEW_PER_RUN || 150); // stories analysed in full per run (caps cost)
+const MAX_TRIAGE = 900;        // headlines checked in the quick first pass
+const TRIAGE_BATCH = 60;       // headlines per quick-pass request
+const BATCH_SIZE = 6;          // articles per full-analysis request
+const PARALLEL = 3;            // AI requests running at the same time
 const MAX_ARTICLE_AGE_H = 30;  // ignore articles older than this
 const KEEP_DAYS = 4;           // drop stories older than this
 const MAX_STORIES = 600;       // keep the data file small and fast
@@ -40,8 +48,21 @@ export const TOPICS = [
   'Chips', 'Phones & Gadgets', 'Computers', 'Gaming', 'Software & Apps', 'Cybersecurity',
   'Streaming & Media', 'Social media', 'Startups & VC', 'Crypto', 'Markets & Economy',
   'Banks & Finance', 'Deals & Mergers', 'Policy & Regulation', 'Energy', 'Cars', 'Space',
-  'Science', 'Health & Biotech', 'Retail', 'Telecoms', 'UK business', 'Other'
+  'Science', 'Health & Biotech', 'Retail', 'Telecoms', 'UK business',
+  'World politics', 'Conflict & security', 'Elections', 'Trade & tariffs', 'Central banks',
+  'Commodities', 'Climate', 'Other'
 ];
+
+// Sections in the app's News tab. Older data used finer sections.
+export const normSection = (s) => (/^(markets|finance)$/i.test(s || '') ? 'Finance' : /^world$/i.test(s || '') ? 'World' : 'Tech');
+const sourceEntry = (a) => ({ name: a.source, title: a.title, link: a.link, published: a.published, image: a.image || '' });
+const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
+async function runParallel(items, limit, fn) {
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) { const i = next++; await fn(items[i], i); }
+  }));
+}
 
 const log = (...a) => console.log('[rumour-radar]', ...a);
 
@@ -91,7 +112,7 @@ async function fetchFeed(feed) {
         title,
         link: cleanLink(it.link || ''),
         source,
-        section: feed.section || 'Tech',
+        section: normSection(feed.section),
         published: it.isoDate || new Date().toISOString(),
         snippet: trim(it.contentSnippet, 600),
         image: it.image || ''
@@ -154,9 +175,10 @@ async function fetchArticle(url) {
 }
 
 export async function readArticles(articles) {
+  if (!articles.length) return;
   let withText = 0;
-  for (let i = 0; i < articles.length; i += 8) {
-    await Promise.all(articles.slice(i, i + 8).map(async (a) => {
+  for (let i = 0; i < articles.length; i += 12) {
+    await Promise.all(articles.slice(i, i + 12).map(async (a) => {
       const { text, image } = await fetchArticle(a.link);
       a.text = text;
       if (!a.image && image) a.image = image;
@@ -179,9 +201,9 @@ const ANALYSIS_TOOL = {
           type: 'object',
           properties: {
             article_index: { type: 'integer' },
-            keep: { type: 'boolean', description: 'true for real news about tech, AI, gadgets, science, companies, investing or markets. false for sport, celebrity gossip, recipes, shopping deals/coupons, podcasts/newsletters with no news, and puzzles.' },
+            keep: { type: 'boolean', description: 'true for real news: tech, AI, gadgets, science, companies, finance, markets, economics, and significant world/political news. false for sport, celebrity gossip, lifestyle, recipes, horoscopes, shopping deals/coupons, podcasts/newsletters with no news, and puzzles.' },
             same_story_as: { type: ['string', 'null'], description: 'If this article covers the SAME specific claim/event as an existing story, that story id (e.g. "a1b2c3d4e5"), or "article:N" for an earlier article in this batch. Otherwise null.' },
-            status: { type: 'string', enum: ['rumour', 'confirmed', 'denied', 'news'], description: 'rumour = unconfirmed claim (leaks, "reportedly", "sources say", analyst predictions of company plans, "in talks"). confirmed = an official announcement that confirms a previously rumoured claim. denied = the company officially denied it. news = ordinary confirmed news.' },
+            status: { type: 'string', enum: ['rumour', 'confirmed', 'denied', 'news'], description: 'rumour = unconfirmed claim (leaks, "reportedly", "sources say", analyst predictions of company plans, "in talks"), including unconfirmed political or world developments that could move markets (e.g. possible tariffs, sanctions, rate decisions, ceasefires, government interventions). confirmed = an official announcement that confirms a previously rumoured claim. denied = officially denied. news = ordinary confirmed news.' },
             claim: { type: 'string', description: 'One short, neutral sentence in your own words stating the core news or claim. Max 140 chars.' },
             summary: { type: 'string', description: 'A proper summary in your own words: 4-6 sentences (about 80-130 words) covering what happened, the most important details and numbers, who is involved, and why it matters.' },
             key_points: { type: 'array', items: { type: 'string' }, description: '4-6 bullet points with the key facts, figures and implications, in your own words. Each one a full sentence.' },
@@ -194,7 +216,7 @@ const ANALYSIS_TOOL = {
             market_take: { type: 'string', description: 'One short sentence on how this could affect investors or the stocks below. Empty string if there is no market angle.' },
             stocks: {
               type: 'array',
-              description: 'Up to 5 publicly traded companies most likely to be affected by this news (or by the rumour if true): the company itself, rivals, suppliers or partners. Use real primary listing tickers (e.g. AAPL, 005930.KS, BARC.L). Empty if none.',
+              description: 'Up to 5 publicly traded companies most likely to be affected by this news (or by the rumour if true): the company itself, rivals, suppliers or partners. For world, political or economic news you may instead list the most affected index, currency or commodity using Yahoo Finance symbols (e.g. ^FTSE, ^GSPC, GBPUSD=X, CL=F for oil, GC=F for gold). Use real primary listing tickers (e.g. AAPL, 005930.KS, BARC.L). Empty if none.',
               items: {
                 type: 'object',
                 properties: {
@@ -216,7 +238,7 @@ const ANALYSIS_TOOL = {
   }
 };
 
-const SYSTEM = `You are the analysis engine of a news app covering tech, AI, gadgets and investing. For every article you write a short neutral summary, key points and a full write-up of the story in your own words, decide whether it is confirmed news or an unconfirmed RUMOUR, estimate how likely rumours are to be true, and list the stocks the story could move.
+const SYSTEM = `You are the analysis engine of a news app with three sections: Tech (tech, AI, gadgets, companies, VC), Finance (markets, companies, economy) and World (major world and political news). For every article you write a short neutral summary, key points and a full write-up of the story in your own words, decide whether it is confirmed news or an unconfirmed RUMOUR, estimate how likely rumours are to be true, and list the stocks the story could move.
 
 Writing: clear, neutral, British English, no hype. Everything must be in your own words; never copy sentences from the articles and never invent facts, figures or quotes.
 
@@ -229,11 +251,15 @@ Estimating likelihood (be calibrated, not dramatic):
 - Official denial: low. Official confirmation: status "confirmed", 100.
 - Long-range predictions (years out) are less certain.
 
+World and political news: say plainly what happened and, where relevant, how it could affect markets (indices, currencies, commodities, sectors). Unconfirmed reports of market-moving decisions are rumours.
+
 Stock impact (for news AND rumours): think about the company itself, competitors, suppliers and partners. Only list companies that are actually publicly traded, with correct tickers; private companies (e.g. OpenAI, Anthropic, SpaceX) have no ticker, so list affected public companies instead. If unsure of a ticker, leave the company out. Be modest: most stories are low or medium impact, and product reviews or how-to articles usually have none.
 
 Analyse every article in the batch and call record_analysis exactly once.`;
 
 async function callClaude(body, apiKey) {
+  // Cache the long, repeated instructions so later requests in the run are cheaper and faster.
+  if (typeof body.system === 'string') body = { ...body, system: [{ type: 'text', text: body.system, cache_control: { type: 'ephemeral' } }] };
   let lastErr;
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -284,6 +310,94 @@ export async function analyseBatch(batch, existing, apiKey) {
   }, apiKey);
   if (!Array.isArray(input.analyses)) throw new Error('AI returned no analysis');
   return input.analyses;
+}
+
+// ---------- 3b. Quick first pass over headlines ----------
+const TRIAGE_TOOL = {
+  name: 'record_triage',
+  description: 'Record a decision for every headline.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      items: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            i: { type: 'integer', description: 'Headline number.' },
+            keep: { type: 'boolean', description: 'false for sport, celebrity, lifestyle, recipes, horoscopes, shopping deals, puzzles, podcasts/newsletters with no news, and trivial items. true for real tech, business, finance, economic, political and world news.' },
+            same_as: { type: ['string', 'null'], description: 'If it reports the SAME specific event as an existing story, that story id; or "a:N" for an earlier headline N in this list about the same event. Otherwise null. Be strict: same event, not just same topic.' }
+          },
+          required: ['i', 'keep', 'same_as']
+        }
+      }
+    },
+    required: ['items']
+  }
+};
+
+const TRIAGE_SYSTEM = 'You sort incoming news headlines for a news app (sections: Tech, Finance, World). For every headline decide whether to keep it and whether it duplicates an existing story or an earlier headline in the list. Call record_triage once with one item per headline.';
+
+async function triageBatch(batch, recent, apiKey) {
+  const existing = recent.map((s) => `${s.id} | ${s.headline || s.claim}`).join('\n') || '(none)';
+  const lines = batch.map((a, i) => `[${i}] ${a.section} | ${a.source} | ${a.title}`).join('\n');
+  const input = await callClaude({
+    model: MODEL,
+    max_tokens: 6000,
+    system: TRIAGE_SYSTEM,
+    tools: [TRIAGE_TOOL],
+    tool_choice: { type: 'tool', name: 'record_triage' },
+    messages: [{ role: 'user', content: `Existing stories (id | headline):\n${existing}\n\nNew headlines:\n${lines}` }]
+  }, apiKey);
+  return Array.isArray(input.items) ? input.items : [];
+}
+
+// Returns the groups of articles that need a full analysis. Duplicates of
+// stories we already have are added to them as extra sources right away.
+export async function triageAll(pool, stories, apiKey, done, now = new Date().toISOString()) {
+  const byId = new Map(stories.map((s) => [s.id, s]));
+  const recent = [...stories].sort((a, b) => (b.last_updated || '').localeCompare(a.last_updated || '')).slice(0, 150);
+  const groups = [];
+  const stats = { dropped: 0, attached: 0 };
+  const batches = chunk(pool, TRIAGE_BATCH);
+  const results = new Array(batches.length);
+  await runParallel(batches, PARALLEL, async (batch, b) => {
+    try { results[b] = await triageBatch(batch, recent, apiKey); } catch (e) {
+      if (e.fatal) throw e;
+      log(`Quick pass failed for one batch, analysing it in full instead: ${e.message}`);
+      results[b] = batch.map((_, i) => ({ i, keep: true, same_as: null }));
+    }
+  });
+  batches.forEach((batch, b) => {
+    const decided = new Map((results[b] || []).map((r) => [r.i, r]));
+    const local = new Map();
+    const later = [];
+    batch.forEach((a, i) => {
+      const r = decided.get(i) || { keep: true, same_as: null };
+      if (!r.keep) { done.push(a.link); stats.dropped++; return; }
+      const ref = r.same_as;
+      if (typeof ref === 'string' && /^a:\d+$/.test(ref)) { later.push([a, i, Number(ref.slice(2))]); return; }
+      if (ref && byId.has(ref)) {
+        const s = byId.get(ref);
+        if (s.status === 'rumour') {
+          // could confirm or deny the rumour, so it gets a full look
+          const g = { art: a, extras: [], target: s }; groups.push(g); local.set(i, g); return;
+        }
+        if (!s.sources.some((x) => x.link === a.link)) s.sources.push(sourceEntry(a));
+        if (!s.image && a.image) s.image = a.image;
+        s.last_updated = now;
+        done.push(a.link); stats.attached++;
+        return;
+      }
+      const g = { art: a, extras: [] }; groups.push(g); local.set(i, g);
+    });
+    for (const [a, i, n] of later) {
+      const g = local.get(n);
+      if (g) { g.extras.push(a); stats.attached++; } else { const ng = { art: a, extras: [] }; groups.push(ng); local.set(i, ng); }
+    }
+  });
+  log(`Quick pass: ${pool.length} headlines → ${groups.length} stories to analyse, ${stats.attached} duplicates grouped, ${stats.dropped} dropped.`);
+  return groups;
 }
 
 // ---------- 4. Merge into stories ----------
@@ -378,7 +492,7 @@ export function mergeBatch(stories, batch, analyses, now = new Date().toISOStrin
       const story = {
         id: idFor(art.link),
         headline: art.title,
-        section: art.section || 'Tech',
+        section: normSection(art.section),
         image: art.image || '',
         ...clean,
         sources: [sourceEntry],
@@ -393,7 +507,7 @@ export function mergeBatch(stories, batch, analyses, now = new Date().toISOStrin
       added++;
     }
   }
-  return { added, merged, dropped, handled: new Set(sorted.map((a) => a.article_index)) };
+  return { added, merged, dropped, handled: new Set(sorted.map((a) => a.article_index)), storyOf: batchStory };
 }
 
 // ---------- 5. Daily briefing ----------
@@ -447,7 +561,8 @@ export async function makeBriefing(stories, apiKey, now = new Date()) {
   const since = new Date(now.getTime() - 16 * 3600e3).toISOString();
   const pub = (s) => s.first_published || s.first_seen || '';
   const score = (s) => (s.sources?.length || 1) * 2 + (IMPACT_RANK[s.overall_impact] || 0) * 2 + (s.status === 'rumour' ? 1 : 0) + (s.status === 'confirmed' ? 2 : 0);
-  const pool = stories.filter((s) => pub(s) >= since || (s.last_updated || '') >= since)
+  const pool = stories.filter((s) => normSection(s.section) === 'Tech')
+    .filter((s) => pub(s) >= since || (s.last_updated || '') >= since)
     .sort((a, b) => score(b) - score(a))
     .slice(0, 90);
   if (pool.length < 3) { log('Not enough recent stories for a briefing yet.'); return null; }
@@ -457,7 +572,7 @@ export async function makeBriefing(stories, apiKey, now = new Date()) {
   const input = await callClaude({
     model: BRIEFING_MODEL,
     max_tokens: 4000,
-    system: `You are the editor of "Rumour Radar", a twice-daily briefing on tech, AI, gadgets and markets. Write the ${edition.toLowerCase()} briefing covering the last ${edition === 'Morning' ? 'night and early morning' : 'day'} for a busy reader. Pick what genuinely matters (big launches, deals, earnings, regulation, AI breakthroughs, market moves, credible rumours), not minor product reviews. Use only story ids from the list. Be neutral, clear, British English, in your own words. Call record_briefing once.`,
+    system: `You are the editor of "Rumour Radar", a twice-daily TECH briefing (tech, AI, gadgets, big tech companies, startups and VC, and tech stocks). Write the ${edition.toLowerCase()} briefing covering the last ${edition === 'Morning' ? 'night and early morning' : 'day'} for a busy reader. Pick what genuinely matters (big launches, deals, earnings, regulation, AI breakthroughs, market moves, credible rumours), not minor product reviews. Use only story ids from the list. Be neutral, clear, British English, in your own words. Call record_briefing once.`,
     tools: [BRIEFING_TOOL],
     tool_choice: { type: 'tool', name: 'record_briefing' },
     messages: [{ role: 'user', content: `Stories (id | status | outlets | impact | section | headline, then summary):\n${list}` }]
@@ -560,28 +675,38 @@ export async function main() {
   const briefing = await readJSON(BRIEFING_FILE, { editions: [] });
 
   const fresh = await collect(feeds, seen);
-  log(`${fresh.length} new articles found; analysing up to ${MAX_NEW_PER_RUN}.`);
-  const todo = fresh.slice(0, MAX_NEW_PER_RUN);
-  await readArticles(todo);
+  const pool = fresh.slice(0, MAX_TRIAGE);
+  log(`${fresh.length} new articles found; checking ${pool.length} headlines.`);
+  const done = [];
+  const groups = await triageAll(pool, news.stories, apiKey, done);
+  const todo = groups.slice(0, MAX_NEW_PER_RUN);
+  if (groups.length > todo.length) log(`${groups.length - todo.length} stories left for the next run.`);
+  await readArticles(todo.map((g) => g.art));
 
   const stats = { added: 0, merged: 0, dropped: 0 };
-  const done = [];
-  for (let i = 0; i < todo.length; i += BATCH_SIZE) {
-    const batch = todo.slice(i, i + BATCH_SIZE);
-    const recent = [...news.stories]
-      .sort((a, b) => b.last_updated.localeCompare(a.last_updated))
-      .slice(0, 80);
+  await runParallel(chunk(todo, BATCH_SIZE), PARALLEL, async (batch) => {
+    const arts = batch.map((g) => g.art);
+    const targets = [...new Set(batch.map((g) => g.target).filter(Boolean))];
     try {
-      const analyses = await analyseBatch(batch, recent, apiKey);
-      const r = mergeBatch(news.stories, batch, analyses);
+      const analyses = await analyseBatch(arts, targets, apiKey);
+      const r = mergeBatch(news.stories, arts, analyses);
       stats.added += r.added; stats.merged += r.merged; stats.dropped += r.dropped;
-      // Only remember articles the AI actually handled, so the rest are retried next run.
-      batch.forEach((a, idx) => { if (r.handled.has(idx)) done.push(a.link); });
+      const byId = new Map(news.stories.map((s) => [s.id, s]));
+      batch.forEach((g, idx) => {
+        if (!r.handled.has(idx)) return;
+        done.push(g.art.link, ...g.extras.map((x) => x.link));
+        const s = byId.get(r.storyOf.get(idx));
+        if (!s) return;
+        for (const x of g.extras) {
+          if (!s.sources.some((y) => y.link === x.link)) s.sources.push(sourceEntry(x));
+          if (!s.image && x.image) s.image = x.image;
+        }
+      });
     } catch (e) {
       if (e.fatal) { console.error('\n❌ ' + e.message + '\n'); process.exit(1); }
       log(`Skipping batch, will retry next run: ${e.message}`);
     }
-  }
+  });
 
   const cutoff = new Date(Date.now() - KEEP_DAYS * 86400e3).toISOString();
   news.stories = news.stories
@@ -590,7 +715,7 @@ export async function main() {
     .slice(0, MAX_STORIES);
   for (const s of news.stories) {
     if (!s.headline) s.headline = s.sources?.[0]?.title || s.claim;
-    if (!s.section) s.section = 'Tech';
+    s.section = normSection(s.section);
   }
   try { await upgradeOld(news.stories, apiKey); } catch (e) {
     if (e.fatal) { console.error('\n❌ ' + e.message + '\n'); process.exit(1); }
