@@ -147,6 +147,7 @@
     box.innerHTML = `
       <div class="wx-top">
         <div class="wx-left">
+          <div class="wx-date">${esc(new Date().toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long', timeZone: 'Europe/London' }))}</div>
           <div class="wx-temp">${deg(w.temp)}</div>
           <div class="wx-sub"><b>${esc(label(k, w.day))}</b> · H ${deg(w.hi)} L ${deg(w.lo)}</div>
           <div class="wx-place">${usingLondon ? '' : '<svg viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M11 1 1 5.4l4.3 1.3L6.6 11z" fill="currentColor"/></svg>'}${esc(w.place)}</div>

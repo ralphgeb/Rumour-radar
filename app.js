@@ -578,18 +578,35 @@
   const backIcon = '<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg>';
   const shareIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8"/></svg>';
 
-  function pushPage({ title, backLabel, html, clearBar, readLink, readLabel, share }) {
+  // Fills (or refills, when swiping between stories) a pushed page.
+  function fillPage(page, o) {
+    page._o = o;
+    const bar = $('.page-bar', page);
+    bar.classList.toggle('clear', !!o.clearBar && page.scrollTop <= page._threshold());
+    bar.classList.remove('show-title');
+    $('.ttl', bar).textContent = o.title || '';
+    $('.back span', bar).textContent = o.clearBar ? '' : (o.backLabel || '');
+    $('[data-share]', bar).hidden = !o.share;
+    $('.page-inner', page).innerHTML = o.html;
+    const rb = $('.read-bar', page);
+    rb.hidden = !o.readLink;
+    if (o.readLink) { const a = $('a', rb); a.href = o.readLink; a.textContent = o.readLabel; }
+  }
+
+  function pushPage(o) {
     const page = document.createElement('div');
     page.className = 'page';
     page.innerHTML = `
-      <div class="page-bar ${clearBar ? 'clear' : ''}">
-        <button class="back" data-back>${backIcon}<span>${clearBar ? '' : esc(backLabel)}</span></button>
-        <div class="ttl">${esc(title)}</div>
-        ${share ? `<button class="icon-btn" data-share>${shareIcon}</button>` : '<span style="width:44px"></span>'}
+      <div class="page-bar">
+        <button class="back" data-back>${backIcon}<span></span></button>
+        <div class="ttl"></div>
+        <button class="icon-btn" data-share>${shareIcon}</button>
       </div>
-      <div class="page-inner">${html}</div>
-      ${readLink ? `<div class="read-bar"><a class="btn-primary" href="${esc(readLink)}" target="_blank" rel="noopener">${esc(readLabel)}</a></div>` : ''}`;
+      <div class="page-inner"></div>
+      <div class="read-bar"><a class="btn-primary" href="#" target="_blank" rel="noopener"></a></div>`;
+    page._threshold = () => (page._o?.clearBar ? Math.min(window.innerHeight * .55, 360) : 60);
     document.body.appendChild(page);
+    fillPage(page, o);
     pages.at(-1)?.classList.add('under');
     pages.push(page);
     history.pushState({ page: pages.length }, '');
@@ -599,21 +616,22 @@
     }));
 
     const bar = $('.page-bar', page);
-    const threshold = clearBar ? Math.min(window.innerHeight * .55, 360) : 60;
     page.addEventListener('scroll', () => {
-      const past = page.scrollTop > threshold;
+      const past = page.scrollTop > page._threshold();
       bar.classList.toggle('show-title', past);
-      if (clearBar) {
+      if (page._o.clearBar) {
         bar.classList.toggle('clear', !past);
-        $('.back span', bar).textContent = past ? backLabel : '';
+        $('.back span', bar).textContent = past ? page._o.backLabel : '';
       }
     }, { passive: true });
 
     page.addEventListener('click', (e) => {
       if (e.target.closest('[data-back]')) { history.back(); return; }
-      if (e.target.closest('[data-share]') && share) {
-        if (navigator.share) navigator.share(share).catch(() => {});
-        else navigator.clipboard?.writeText(share.url).then(() => toast('Link copied'));
+      const st = e.target.closest('[data-step]');
+      if (st) { e.preventDefault(); stepStory(page, Number(st.dataset.step)); return; }
+      if (e.target.closest('[data-share]') && page._o.share) {
+        if (navigator.share) navigator.share(page._o.share).catch(() => {});
+        else navigator.clipboard?.writeText(page._o.share.url).then(() => toast('Link copied'));
       }
     });
     enableEdgeSwipe(page);
@@ -650,14 +668,81 @@
     });
   }
 
+  // Swipe left / right on a story to move to the next / previous one in the list it came from.
+  function enableStorySwipe(page) {
+    let x0 = null, y0 = 0, dx = 0, mode = null;
+    const inner = () => $('.page-inner', page);
+    page.addEventListener('touchstart', (e) => {
+      const t = e.touches[0];
+      if (t.clientX < 28 || e.touches.length > 1) { x0 = null; return; } // left edge = back
+      x0 = t.clientX; y0 = t.clientY; dx = 0; mode = null;
+    }, { passive: true });
+    page.addEventListener('touchmove', (e) => {
+      if (x0 === null) return;
+      const t = e.touches[0];
+      dx = t.clientX - x0;
+      const dy = t.clientY - y0;
+      if (!mode && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) mode = Math.abs(dx) > Math.abs(dy) * 1.4 ? 'h' : 'v';
+      if (mode !== 'h') return;
+      const i = page._seq.indexOf(page._sid);
+      const atEnd = (dx < 0 && i >= page._seq.length - 1) || (dx > 0 && i <= 0);
+      const el = inner();
+      el.style.transition = 'none';
+      el.style.transform = `translateX(${dx * (atEnd ? 0.15 : 0.45)}px)`;
+      el.style.opacity = String(1 - Math.min(Math.abs(dx) / 900, 0.25));
+    }, { passive: true });
+    page.addEventListener('touchend', () => {
+      if (x0 === null) return;
+      x0 = null;
+      const el = inner();
+      if (mode === 'h' && Math.abs(dx) > 70) { stepStory(page, dx < 0 ? 1 : -1, true); return; }
+      el.style.transition = 'transform .25s ease, opacity .25s ease';
+      el.style.transform = ''; el.style.opacity = '';
+    });
+  }
+
+  function stepStory(page, delta, fromSwipe) {
+    const i = page._seq.indexOf(page._sid);
+    const j = i + delta;
+    const el = $('.page-inner', page);
+    if (j < 0 || j >= page._seq.length || !byId.get(page._seq[j])) {
+      el.style.transition = 'transform .25s ease, opacity .25s ease';
+      el.style.transform = ''; el.style.opacity = '';
+      toast(delta > 0 ? 'That’s the last story in this list' : 'That’s the first story in this list', 1800);
+      return;
+    }
+    el.style.transition = 'transform .16s ease-in, opacity .16s ease-in';
+    el.style.transform = `translateX(${delta > 0 ? -40 : 40}%)`;
+    el.style.opacity = '0';
+    setTimeout(() => {
+      page._sid = page._seq[j];
+      fillPage(page, storyPage(byId.get(page._sid), page._o.backLabel, page._seq));
+      page.scrollTop = 0;
+      el.style.transition = 'none';
+      el.style.transform = `translateX(${delta > 0 ? 40 : -40}%)`;
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        el.style.transition = 'transform .28s cubic-bezier(.2,.8,.2,1), opacity .28s ease';
+        el.style.transform = ''; el.style.opacity = '';
+      }));
+    }, fromSwipe ? 120 : 160);
+  }
+
   function impactDots(level) {
     const n = IMPACT[level] || 1;
     return `<span class="impact-dots">${[1, 2, 3].map((i) => `<i class="${i <= n ? 'on' : ''}"></i>`).join('')}</span>`;
   }
 
-  function openStory(id, backLabel) {
+  function openStory(id, backLabel, seq) {
     const s = byId.get(id);
     if (!s) return;
+    const list = (seq && seq.includes(id)) ? seq : [id];
+    const page = pushPage(storyPage(s, backLabel, list));
+    page._seq = list;
+    page._sid = id;
+    enableStorySwipe(page);
+  }
+
+  function storyPage(s, backLabel, seq) {
     const l = lead(s);
     const n = s.sources?.length || 1;
     const hasImg = !!imageOf(s);
@@ -721,13 +806,26 @@
         <div class="tags">${statusPill(s)}<span class="tag">${esc(sectionOf(s))}</span>${(s.topics || []).filter((t) => t !== 'Other').map((t) => `<span class="tag">${esc(t)}</span>`).join('')}</div>
       </div>
       ${summaryCard}${fullStory}${odds}${stocks}${sources}
+      ${upNext(s, seq)}
       <p class="disclaimer">Summary, write-up, odds and market effects are AI-generated and can be wrong. Not financial advice.</p>`;
 
-    pushPage({
+    return {
       title: l.name || 'Story', backLabel, html, clearBar: hasImg,
       readLink: safeUrl(l.link), readLabel: `Read the original on ${l.name || 'the website'}`,
       share: safeUrl(l.link) ? { title: headline(s), url: l.link } : null
-    });
+    };
+  }
+
+  function upNext(s, seq) {
+    const i = (seq || []).indexOf(s.id);
+    if (i < 0 || seq.length < 2) return '';
+    const next = byId.get(seq[i + 1]);
+    const hint = `<p class="swipe-hint">Story ${i + 1} of ${seq.length} · swipe left or right for the next or previous story</p>`;
+    if (!next) return hint;
+    return `${hint}<a class="next-card" href="#" data-step="1">
+      <div class="txt"><span class="lbl">Up next</span><span class="h">${esc(headline(next))}</span><span class="s">${esc(lead(next).name)} · ${ago(pubTime(next))}</span></div>
+      ${media(next)}
+    </a>`;
   }
 
   function openTicker(ticker, backLabel) {
@@ -810,7 +908,9 @@
     if (story) {
       e.preventDefault();
       const label = pages.length ? 'Back' : $(`.view[data-view="${state.tab}"]`).dataset.title;
-      openStory(story.dataset.story, label.length > 10 ? 'Back' : label);
+      const scope = story.closest('.page-inner') || $(`.view[data-view="${state.tab}"]`);
+      const seq = [...new Set($$('[data-story]', scope).map((x) => x.dataset.story))].filter((x) => byId.has(x));
+      openStory(story.dataset.story, label.length > 10 ? 'Back' : label, seq);
       return;
     }
     const tk = e.target.closest('[data-ticker]');

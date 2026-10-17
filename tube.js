@@ -19,6 +19,7 @@
   };
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const el = () => document.getElementById('tube');
+  const TRAIN = '<svg class="tb-mark" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="5" y="3" width="14" height="14" rx="4"/><path d="M5 10h14M9 21l2-4M15 21l-2-4"/><circle cx="9" cy="13.5" r="1" class="f"/><circle cx="15" cy="13.5" r="1" class="f"/></svg>';
 
   // 0 = good, 1 = minor, 2 = severe, -1 = info only
   function level(sev) {
@@ -51,28 +52,44 @@
     if (!box) return;
     if (store.get('rr.tube', 'show') === 'hide') { box.hidden = true; return; }
     box.hidden = false;
-    const head = (right) => `<div class="tb-head"><div class="tb-title"><svg class="tb-mark" viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><rect x="5" y="3" width="14" height="14" rx="4"/><path d="M5 10h14M9 21l2-4M15 21l-2-4"/><circle cx="9" cy="13.5" r="1" class="f"/><circle cx="15" cy="13.5" r="1" class="f"/></svg>Tube status</div><button class="tb-upd" data-tube-refresh>${right}</button></div>`;
     if (!data) {
-      box.innerHTML = head(state === 'error' ? 'Unavailable · retry' : 'Loading…') + '<div class="tb-skel"><i></i><i></i><i></i></div>';
+      box.innerHTML = `<div class="tb-bar1"><span class="tb-title">${TRAIN}Tube</span><span class="tb-ok muted">${state === 'error' ? 'Unavailable' : 'Loading…'}</span><button class="tb-upd" data-tube-refresh>${state === 'error' ? 'Retry' : ''}</button></div>`;
       return;
     }
     const bad = data.lines.filter((l) => l.lvl > 0).sort((a, b) => b.lvl - a.lvl || a.name.localeCompare(b.name));
-    const body = !bad.length
-      ? '<div class="tb-ok"><span class="tb-okdot"></span>Good service on all lines</div>'
-      : bad.map((l) => `
-      <details class="tb-row lvl${l.lvl}">
-        <summary>
-          <span class="tb-dot" style="--c:${COLOURS[l.id] || '#888'}"></span>
-          <span class="tb-name">${esc(l.name)}</span>
-          <span class="tb-st">${esc(l.status)}</span>
-          <svg class="tb-chev" viewBox="0 0 12 8" width="10" height="7"><path d="M1 1.5l5 5 5-5"/></svg>
+    const upd = `Updated ${time(data.fetched)}`;
+    if (!bad.length) {
+      box.innerHTML = `<div class="tb-bar1"><span class="tb-title">${TRAIN}Tube</span><span class="tb-ok"><span class="tb-okdot"></span>Good service</span><button class="tb-upd" data-tube-refresh>${upd}</button></div>`;
+      return;
+    }
+    const sev = bad.some((l) => l.lvl === 2);
+    const wasOpen = box.querySelector('details.tb-all')?.open;
+    const openLines = new Set([...box.querySelectorAll('details.tb-row[open]')].map((d) => d.dataset.id));
+    box.innerHTML = `
+      <details class="tb-all"${wasOpen ? ' open' : ''}>
+        <summary class="tb-bar1">
+          <span class="tb-title">${TRAIN}Tube</span>
+          <span class="tb-swatches">${bad.map((l) => `<i class="tb-sw lvl${l.lvl}" style="--c:${COLOURS[l.id] || '#888'}" title="${esc(l.name)}"></i>`).join('')}</span>
+          <span class="tb-count ${sev ? 'sev' : 'min'}">${bad.length} disrupted</span>
+          <svg class="tb-chev" viewBox="0 0 12 8" width="11" height="8"><path d="M1 1.5l5 5 5-5"/></svg>
         </summary>
-        <div class="tb-more">
-          <div class="tb-st-big">${esc(l.status)}</div>
-          <p class="tb-reason">${esc(l.reason ? tidy(l.reason, l.name) : 'No further details from TfL.')}</p>
+        <div class="tb-list">
+          ${bad.map((l) => `
+          <details class="tb-row lvl${l.lvl}" data-id="${esc(l.id)}"${openLines.has(l.id) ? ' open' : ''}>
+            <summary>
+              <span class="tb-dot" style="--c:${COLOURS[l.id] || '#888'}"></span>
+              <span class="tb-name">${esc(l.name)}</span>
+              <span class="tb-st">${esc(l.status)}</span>
+              <svg class="tb-chev" viewBox="0 0 12 8" width="10" height="7"><path d="M1 1.5l5 5 5-5"/></svg>
+            </summary>
+            <div class="tb-more">
+              <div class="tb-st-big">${esc(l.status)}</div>
+              <p class="tb-reason">${esc(l.reason ? tidy(l.reason, l.name) : 'No further details from TfL.')}</p>
+            </div>
+          </details>`).join('')}
+          <div class="tb-rest"><span>Good service on all other lines</span><button class="tb-upd" data-tube-refresh>${upd} · ${day(data.fetched)}</button></div>
         </div>
-      </details>`).join('') + `<div class="tb-rest">Good service on all other lines</div>`;
-    box.innerHTML = head(`Updated ${time(data.fetched)} · ${day(data.fetched)}`) + `<div class="tb-list">${body}</div>`;
+      </details>`;
   }
 
   let busy = false;
@@ -104,7 +121,9 @@
     if (!el()) return;
     document.querySelectorAll('#tubeSeg button').forEach((b) => b.classList.toggle('on', b.dataset.v === store.get('rr.tube', 'show')));
     document.getElementById('tubeSeg')?.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.v); });
-    el().addEventListener('click', (e) => { if (e.target.closest('[data-tube-refresh]')) update(true); });
+    el().addEventListener('click', (e) => {
+      if (e.target.closest('[data-tube-refresh]')) { e.preventDefault(); e.stopPropagation(); update(true); }
+    });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) update(false); });
     setInterval(() => { if (!document.hidden) update(true); }, 5 * 60e3);
     update(false);
