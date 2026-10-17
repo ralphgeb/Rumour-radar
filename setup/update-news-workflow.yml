@@ -9,6 +9,8 @@ on:
     - cron: "30 7 * * *"
     - cron: "0 16 * * *"
     - cron: "0 17 * * *"
+    # Stock prices only, every hour on weekdays (about 7:20 to 22:20 UK time).
+    - cron: "20 6-21 * * 1-5"
   workflow_dispatch:          # the "Run workflow" button and the app's refresh button
     inputs:
       briefing:
@@ -17,9 +19,9 @@ on:
         options: [auto, "yes", "no"]
         default: auto
       mode:
-        description: "full = news and stocks, stocks = stocks only (quick)"
+        description: "full = news and stocks, stocks = stocks only (quick), prices = prices only (quickest)"
         type: choice
-        options: [full, stocks]
+        options: [full, stocks, prices]
         default: full
       watchlist:
         description: "Your stocks, sent by the app (leave empty)"
@@ -41,13 +43,18 @@ jobs:
       - name: Check London time
         id: gate
         run: |
-          if [ "${{ github.event_name }}" != "schedule" ]; then echo "go=true" >> "$GITHUB_OUTPUT"; exit 0; fi
-          OFF=$(TZ=Europe/London date +%z)
           S="${{ github.event.schedule }}"
+          if [ "${{ github.event_name }}" != "schedule" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"; echo "mode=${{ github.event.inputs.mode || 'full' }}" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          if [ "$S" = "20 6-21 * * 1-5" ]; then
+            echo "go=true" >> "$GITHUB_OUTPUT"; echo "mode=prices" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          OFF=$(TZ=Europe/London date +%z)
           if [ "$OFF" = "+0100" ] && { [ "$S" = "30 6 * * *" ] || [ "$S" = "0 16 * * *" ]; }; then
-            echo "go=true" >> "$GITHUB_OUTPUT"
+            echo "go=true" >> "$GITHUB_OUTPUT"; echo "mode=full" >> "$GITHUB_OUTPUT"
           elif [ "$OFF" = "+0000" ] && { [ "$S" = "30 7 * * *" ] || [ "$S" = "0 17 * * *" ]; }; then
-            echo "go=true" >> "$GITHUB_OUTPUT"
+            echo "go=true" >> "$GITHUB_OUTPUT"; echo "mode=full" >> "$GITHUB_OUTPUT"
           else
             echo "go=false" >> "$GITHUB_OUTPUT"
             echo "Not 7:30 or 17:00 in London right now, so skipping this one."
@@ -61,13 +68,22 @@ jobs:
         with:
           node-version: 22
 
+      - uses: actions/setup-python@v5
+        if: steps.gate.outputs.go == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Install the stock price tool
+        if: steps.gate.outputs.go == 'true'
+        run: pip install --quiet --upgrade yfinance
+
       - name: Collect and analyse news
         if: steps.gate.outputs.go == 'true'
         run: node scripts/update-news.mjs
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MAKE_BRIEFING: ${{ github.event.inputs.briefing || 'auto' }}
-          MODE: ${{ github.event.inputs.mode || 'full' }}
+          MODE: ${{ steps.gate.outputs.mode }}
           WATCHLIST: ${{ github.event.inputs.watchlist || '' }}
 
       - name: Save results
@@ -76,4 +92,4 @@ jobs:
           git config user.name "rumour-radar-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data
-          git diff --cached --quiet || (git commit -m "Update news" && git pull --rebase && git push)
+          git diff --cached --quiet || (git commit -m "Update ${{ steps.gate.outputs.mode }}" && git pull --rebase && git push)

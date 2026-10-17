@@ -2,26 +2,30 @@
 
 Your morning and evening briefing on tech, AI, gadgets and markets, as an iPhone app. It reads more than 60 tech, finance and world news sites. Every story gets its picture, an AI summary with key points, and a full write-up in the AI's own words, plus the stocks it could move. Rumours get their own tab with AI odds on how likely each one is to be true.
 
-## Already using an older version? Update to the Stocks version (about 10 minutes)
+## Already using an older version? Update (about 10 minutes)
 
 ### 1. Upload the new files
 
 1. Unzip the new `rumour-radar.zip` and open the folder.
 2. In your GitHub repository, click **Add file → Upload files**.
-3. Drag in everything **except the `data` folder**, including the `scripts` folder.
-4. Check that **`stocks.js`** and **`scripts/stocks.mjs`** appear in the list, then click **Commit changes**.
+3. Drag in everything **except the `data` folder**, including the `scripts` folder, which has the new `prices.py`.
+4. Click **Commit changes**.
 
-### 2. Replace the workflow (needed for Stocks)
+### 2. Replace the workflow
 
 1. Open `setup/update-news-workflow.yml` in your repository and click **Copy raw file**.
-2. Open `.github/workflows/update-news.yml` and click the **pencil** icon.
-3. Select everything (**Ctrl + A** or **Cmd + A**), delete it, and paste.
-4. Click **Commit changes**.
+2. Open `.github/workflows/update-news.yml`, click the **pencil**, select everything, delete it, and paste.
+3. Click **Commit changes**.
+
+The new workflow does two things:
+- It fetches stock prices with **yfinance**, a free tool installed automatically on GitHub. No key or account is needed.
+- It updates **prices every hour on weekdays**.
 
 ### 3. Get the first prices
 
-1. In the app, open the **Stocks** tab and tap **refresh**. This takes about a minute.
-2. Or, on GitHub, go to **Actions → Update news → Run workflow** and set **mode** to **stocks**.
+1. Go to **Actions → Update news → Run workflow**.
+2. Set **mode** to **stocks** and click **Run workflow**.
+3. It takes about 2–3 minutes the first time.
 
 ---
 
@@ -164,7 +168,9 @@ The app has four tabs along the bottom.
     - key stats
     - an AI **What's happening** summary
     - every story that mentions the company
-  - Refreshing on the Stocks tab updates only the prices, which is quicker.
+  - Prices update **every hour on weekdays** (about 7:20 to 22:20 UK time), plus whenever you refresh on the Stocks tab. That's quicker, as it only updates prices.
+  - AI summaries and each stock's headlines are refreshed with the morning and evening briefings.
+  - A stock you add gets its price, AI summary and headlines straight away. This needs Live refresh to be on.
 - **Rumours** now lives in the **News** tab as a chip next to Tech, Finance and World. It shows unconfirmed stories with the AI's odds:
   - green: likely
   - amber: toss-up

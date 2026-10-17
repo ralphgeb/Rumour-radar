@@ -835,10 +835,11 @@ export async function main() {
     }
   };
 
-  // Quick update: stocks only (used when you add a stock or refresh the Stocks tab).
-  if ((process.env.MODE || '').toLowerCase() === 'stocks') {
-    await doStocks('missing');
-    log('Stocks-only update done.');
+  // Quick updates: 'stocks' when you add a stock or refresh the Stocks tab, 'prices' every hour on weekdays.
+  const MODE = (process.env.MODE || 'full').toLowerCase();
+  if (MODE === 'stocks' || MODE === 'prices') {
+    await doStocks(MODE === 'prices' ? 'prices' : 'missing');
+    log(`${MODE === 'prices' ? 'Hourly prices' : 'Stocks-only'} update done.`);
     return;
   }
 

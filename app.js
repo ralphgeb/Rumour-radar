@@ -606,7 +606,7 @@
   const shareIcon = '<svg viewBox="0 0 24 24"><path d="M12 3v12M8 7l4-4 4 4"/><path d="M6 11v8a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2v-8"/></svg>';
 
   // Fills (or refills, when swiping between stories) a pushed page.
-  function fillPage(page, o) {
+  function fillPage(page, o, keepInner) {
     page._o = o;
     const bar = $('.page-bar', page);
     bar.classList.toggle('clear', !!o.clearBar && page.scrollTop <= page._threshold());
@@ -614,7 +614,7 @@
     $('.ttl', bar).textContent = o.title || '';
     $('.back span', bar).textContent = o.clearBar ? '' : (o.backLabel || '');
     $('[data-share]', bar).hidden = !o.share;
-    $('.page-inner', page).innerHTML = o.html;
+    if (!keepInner) $('.page-inner', page).innerHTML = o.html;
     const rb = $('.read-bar', page);
     rb.hidden = !o.readLink;
     if (o.readLink) { const a = $('a', rb); a.href = o.readLink; a.textContent = o.readLabel; }
@@ -706,6 +706,8 @@
     const peek = document.createElement('div');
     peek.className = 'page-inner peek';
     peek.innerHTML = storyPage(byId.get(sid), page._o.backLabel, page._seq).html;
+    // load its pictures straight away (they'd otherwise wait until fully on screen)
+    peek.querySelectorAll('img').forEach((im) => { im.loading = 'eager'; });
     const barH = $('.page-bar', page).offsetHeight;
     peek.style.cssText = `position:absolute;left:0;width:100%;top:${page.scrollTop}px;height:${page.clientHeight}px;overflow:hidden;padding-top:${barH}px;box-sizing:border-box;background:var(--bg);`;
     $('.page-inner', page).after(peek);
@@ -715,14 +717,32 @@
     el.style.transition = anim ? `transform ${anim}ms ${EASE}` : 'none';
     el.style.transform = x ? `translate3d(${x}px,0,0)` : '';
   }
+  // At the end of a swipe the story that slid in simply stays (nothing is redrawn, so no flicker).
   function finishStep(page, sid, peek) {
     const main = $('.page-inner', page);
     page._sid = sid;
-    fillPage(page, storyPage(byId.get(sid), page._o.backLabel, page._seq));
-    page.scrollTop = 0;
-    setX(main, 0);
-    peek?.remove();
+    const o = storyPage(byId.get(sid), page._o.backLabel, page._seq);
+    if (peek) {
+      main.remove();
+      peek.classList.remove('peek');
+      peek.removeAttribute('style');
+      page.scrollTop = 0;
+      fillPage(page, o, true);
+    } else {
+      fillPage(page, o);
+      page.scrollTop = 0;
+      setX(main, 0);
+    }
     page._busy = false;
+    preloadNeighbours(page);
+  }
+  // Fetch the next and previous stories' pictures in advance.
+  function preloadNeighbours(page) {
+    [-1, 1].forEach((d) => {
+      const sid = neighbour(page, d);
+      const u = sid && imageOf(byId.get(sid));
+      if (u) { const im = new Image(); im.referrerPolicy = 'no-referrer'; im.src = u; }
+    });
   }
 
   function enableStorySwipe(page) {
@@ -800,6 +820,7 @@
     page._seq = list;
     page._sid = id;
     enableStorySwipe(page);
+    preloadNeighbours(page);
   }
 
   function storyPage(s, backLabel, seq) {

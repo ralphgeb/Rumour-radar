@@ -153,7 +153,7 @@
     return `<div class="stk-row${editing && rank == null ? ' editing' : ''}" data-stock="${esc(sym)}">
       ${editing && rank == null ? `<button class="stk-del" data-del="${esc(sym)}" aria-label="Remove ${esc(sym)}"><i></i></button>` : ''}
       ${rank != null ? `<span class="stk-rank">${rank}</span>` : ''}
-      <div class="stk-id"><b>${esc(sym)}</b><span>${esc(bad ? 'Ticker not found' : missing ? 'Price arrives with next update' : name)}</span></div>
+      <div class="stk-id"><b>${esc(sym)}</b><span>${esc(bad ? 'Ticker not found' : missing ? (RR.hasLiveKey() ? 'Fetching price…' : 'Price arrives with next update') : name)}</span></div>
       ${missing ? '<span class="spark"></span>' : spark(sym)}
       <div class="stk-px">
         <span class="p">${missing ? '' : money(q.price, q.currency, true)}</span>
@@ -176,7 +176,7 @@
       return;
     }
     const lead = quote(data.top[0]);
-    const when = data.liveAt && liveOK ? `Live · ${timeLondon(data.liveAt)}` : `Prices as of ${timeLondon(data.updated)}`;
+    const when = data.liveAt && liveOK ? `Live · ${timeLondon(data.liveAt)}` : `Prices as of ${timeLondon(data.pricesUpdated || data.updated)}`;
     $('#stkAsOf').textContent = `${when} · ${stateLabel(lead?.marketState)}`;
     let html = '';
     if (watch.length) {
@@ -272,7 +272,7 @@
     if (q && q.price != null) {
       html += `<div class="sd-price">${money(q.price, q.currency)}</div>
         <div class="sd-chg ${dirOf(q.change)}">${q.change > 0 ? '▲' : q.change < 0 ? '▼' : ''} ${money(Math.abs(q.change ?? 0), q.currency, true)} (${pctStr(q.changePct)}) <span>today</span></div>
-        <div class="sd-asof">${esc(stateLabel(q.marketState))} · ${esc(data.liveAt && liveOK ? 'live ' + timeLondon(data.liveAt) : 'as of ' + timeLondon(data.updated))}</div>
+        <div class="sd-asof">${esc(stateLabel(q.marketState))} · ${esc(data.liveAt && liveOK ? 'live ' + timeLondon(data.liveAt) : 'as of ' + timeLondon(data.pricesUpdated || data.updated))} · prices update hourly on weekdays</div>
         <section class="card sd-chart-card">
           <div class="segmented sd-seg"><button data-r="d1" class="on">1D</button><button data-r="m1">1M</button><button data-r="y1">1Y</button></div>
           <div class="sd-range-lbl"></div>
@@ -292,10 +292,21 @@
     if (s) {
       html += `<section class="card"><div class="card-title"><h2><span class="sparkle">✦</span> What’s happening</h2><span class="sent-pill ${s.sentiment}">${esc(s.sentiment)}</span></div>
         <p><b>${esc(s.headline)}</b></p><p>${esc(s.summary)}</p>
-        <p class="sd-note">AI summary · ${esc(timeLondon(s.generated))}</p></section>`;
+        <p class="sd-note">AI summary · ${esc(timeLondon(s.generated))} · refreshed with your morning and evening briefings</p></section>`;
+    } else if (q && q.price != null) {
+      html += `<section class="card"><div class="card-title"><h2><span class="sparkle">✦</span> What’s happening</h2></div>
+        <p class="sd-note" style="font-size:14px">The AI summary is on its way${RR.hasLiveKey() ? ' (about a minute after adding)' : ''}, and it’s refreshed with every morning and evening briefing.</p></section>`;
     }
-    html += RR.sectionHead('Stories', rel.length ? String(rel.length) : '');
-    html += rel.length ? `<div class="list">${rel.map(RR.row).join('')}</div>` : `<p class="sd-none">No stories about ${esc(sym)} in the last few days.</p>`;
+    const heads = (data?.news?.[sym] || []).slice(0, 8);
+    if (heads.length) {
+      html += RR.sectionHead('Latest headlines', '');
+      html += `<div class="list sd-heads">${heads.map((h) => `<a class="sd-head-row" href="${esc(h.link)}" target="_blank" rel="noopener">
+        <div><div class="t">${esc(h.title)}</div><div class="m">${esc(h.source || '')}${h.published ? ' · ' + esc(RR.ago(h.published)) : ''}</div></div>${RR.chevron}</a>`).join('')}</div>`;
+    }
+    if (rel.length || !heads.length) {
+      html += RR.sectionHead('In your news', rel.length ? String(rel.length) : '');
+      html += rel.length ? `<div class="list">${rel.map(RR.row).join('')}</div>` : `<p class="sd-none">No stories about ${esc(sym)} in the app’s news in the last few days.</p>`;
+    }
     html += `<button class="btn-secondary sd-watch" data-watch="${esc(sym)}">${inWatch ? 'Remove from My stocks' : '+ Add to My stocks'}</button>
       <a class="btn-secondary" href="https://finance.yahoo.com/quote/${encodeURIComponent(sym)}" target="_blank" rel="noopener">View on Yahoo Finance</a>
       <p class="disclaimer">Prices may be delayed. The summary is AI-generated from the app’s news coverage and can be wrong. Not financial advice.</p></div>`;
@@ -334,7 +345,7 @@
     sym = sym.toUpperCase();
     if (!validSymbol(sym) || watch.includes(sym)) return;
     watch.push(sym); saveWatch(); render();
-    toast(RR.hasLiveKey() ? `Added ${sym}. Fetching its price and summary…` : `Added ${sym}. Its price arrives with the next update.`, 2600);
+    toast(RR.hasLiveKey() ? `Added ${sym}. Getting its price, AI summary and headlines (about a minute)…` : `Added ${sym}. Its price arrives with the next update. Turn on Live refresh in Settings to get it straight away.`, 3500);
     if (!quote(sym)) scheduleSync();
     liveAt = 0; tryLive();
   }
