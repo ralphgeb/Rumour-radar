@@ -125,6 +125,7 @@
       if (e.target.closest('[data-tube-refresh]')) { e.preventDefault(); e.stopPropagation(); update(true); }
     });
     document.addEventListener('visibilitychange', () => { if (!document.hidden) update(false); });
+    if (window.RR) window.RR.refreshTube = () => update(true);
     setInterval(() => { if (!document.hidden) update(true); }, 5 * 60e3);
     update(false);
   }

@@ -198,6 +198,7 @@
     document.getElementById('wxSeg')?.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b) setMode(b.dataset.v); });
     el().addEventListener('click', () => update(true));
     document.addEventListener('visibilitychange', () => { if (!document.hidden) update(false); });
+    if (window.RR) window.RR.refreshWeather = () => update(true);
     setInterval(() => { if (!document.hidden) update(true); }, 15 * 60e3);
     // Show the last known weather straight away; ask for location after the welcome sheet.
     const cached = store.get('rr.wx', null);

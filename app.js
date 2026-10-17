@@ -218,11 +218,11 @@
       const repo = repoInfo();
       if (!token || !repo) {
         await Promise.all([load(), sleep(900)]);
-        if (mode === 'stocks') toast('Prices reloaded. Turn on Live refresh in Settings to fetch the latest prices now.', 4500);
+        if (mode === 'stocks') toast('Tube and weather updated. Turn on Live refresh in Settings to fetch the latest stock prices too.', 4500);
         else toast(updated && updated !== before ? 'New stories loaded' : `You’re up to date · next update ${nextUpdateLabel()}`);
         return;
       }
-      toast(mode === 'stocks' ? 'Fetching the latest prices. This takes about a minute.' : 'Fetching the latest news from 60+ sites. This takes a few minutes.', 4500);
+      toast(mode === 'stocks' ? 'Tube and weather updated · fetching the latest stock prices (about a minute)…' : 'Fetching the latest news from 60+ sites. This takes a few minutes.', 4500);
       const gh = github(token, repo);
       const wf = await findWorkflow(gh);
       const t0 = Date.now();
@@ -269,7 +269,7 @@
         await sleep(10000);
       }
       await load();
-      if (mode === 'stocks') toast(fresh ? 'Prices updated' : 'Update done. It may take another minute to appear.');
+      if (mode === 'stocks') toast(fresh ? 'Stock prices updated' : 'Update done. Prices may take another minute to appear.');
       else toast(fresh ? (lastRun && lastRun.added ? `Updated · ${lastRun.added} new stor${lastRun.added === 1 ? 'y' : 'ies'}` : 'Updated · you’re all caught up') : 'Update done. It may take another minute to appear.');
     } catch (e) {
       toast(e.message || 'Couldn’t refresh right now.', 5500);
@@ -278,7 +278,13 @@
       setBusy(false);
     }
   }
-  const refreshAll = () => runUpdate(state.tab === 'stocks' ? 'stocks' : 'full');
+  // Refresh never re-runs the news AI: news and Today come from the 7:30 and 17:00 updates.
+  // It updates the Tube and weather straight away, and stock prices (plus AI summaries for newly added stocks).
+  const refreshAll = () => {
+    window.RR?.refreshWeather?.();
+    window.RR?.refreshTube?.();
+    return runUpdate('stocks');
+  };
 
   // ---------- TODAY ----------
   function storyScore(s) {
