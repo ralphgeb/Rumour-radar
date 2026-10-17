@@ -16,6 +16,15 @@ on:
         type: choice
         options: [auto, "yes", "no"]
         default: auto
+      mode:
+        description: "full = news and stocks, stocks = stocks only (quick)"
+        type: choice
+        options: [full, stocks]
+        default: full
+      watchlist:
+        description: "Your stocks, sent by the app (leave empty)"
+        type: string
+        default: ""
 
 permissions:
   contents: write
@@ -58,6 +67,8 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MAKE_BRIEFING: ${{ github.event.inputs.briefing || 'auto' }}
+          MODE: ${{ github.event.inputs.mode || 'full' }}
+          WATCHLIST: ${{ github.event.inputs.watchlist || '' }}
 
       - name: Save results
         if: steps.gate.outputs.go == 'true'
