@@ -75,7 +75,7 @@ jobs:
 
       - name: Install the stock price tool
         if: steps.gate.outputs.go == 'true'
-        run: pip install --quiet --upgrade yfinance
+        run: pip install --quiet --upgrade yfinance financedatabase
 
       - name: Collect and analyse news
         if: steps.gate.outputs.go == 'true'
