@@ -11,7 +11,7 @@
     'World politics', 'Conflict & security', 'Elections', 'Trade & tariffs', 'Central banks',
     'Commodities', 'Climate'
   ];
-  const SECTIONS = [['all', 'All'], ['foryou', 'For You'], ['Tech', 'Tech'], ['Finance', 'Finance'], ['World', 'World']];
+  const SECTIONS = [['all', 'All'], ['foryou', 'For You'], ['Tech', 'Tech'], ['Finance', 'Finance'], ['World', 'World'], ['rumours', 'Rumours']];
   const IMPACT = { none: 0, low: 1, medium: 2, high: 3 };
   const ARROW = { up: '▲', down: '▼', mixed: '◆' };
   const PAGE_SIZE = 40;
@@ -165,6 +165,7 @@
       /* keep what we have */
     }
     renderAll();
+    window.RR?.afterLoad?.();
   }
 
   // ---------- refresh (the button at the top) ----------
@@ -202,25 +203,37 @@
     return wf.id;
   }
 
-  async function refreshAll() {
+  // Starts the update on GitHub and waits until the new data is published.
+  //   mode 'full'   = news + stocks (a few minutes)
+  //   mode 'stocks' = stocks only (about a minute)
+  async function runUpdate(mode = 'full') {
     if (refreshing) return;
     refreshing = true;
     setRefreshLabel('Refreshing');
     setBusy(true);
     const before = updated;
+    const stocksStamp = async () => { try { const r = await fetch('data/stocks.json?t=' + Date.now(), { cache: 'no-store' }); return r.ok ? (await r.json()).updated : null; } catch { return null; } };
     try {
       const token = store.get('rr.ghToken', '');
       const repo = repoInfo();
       if (!token || !repo) {
         await Promise.all([load(), sleep(900)]);
-        toast(updated && updated !== before ? 'New stories loaded' : `You’re up to date · next update ${nextUpdateLabel()}`);
+        if (mode === 'stocks') toast('Prices reloaded. Turn on Live refresh in Settings to fetch the latest prices now.', 4500);
+        else toast(updated && updated !== before ? 'New stories loaded' : `You’re up to date · next update ${nextUpdateLabel()}`);
         return;
       }
-      toast('Fetching the latest news from 60+ sites. This takes a few minutes.', 4500);
+      toast(mode === 'stocks' ? 'Fetching the latest prices. This takes about a minute.' : 'Fetching the latest news from 60+ sites. This takes a few minutes.', 4500);
       const gh = github(token, repo);
       const wf = await findWorkflow(gh);
       const t0 = Date.now();
-      const r = await gh(`/actions/workflows/${wf}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: 'main' }) });
+      const wl = (window.RR?.watchlist?.() || []);
+      let r = await gh(`/actions/workflows/${wf}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { mode, watchlist: wl.length ? wl.join(',') : '-' } }) });
+      if (r.status === 422) {
+        // The workflow on GitHub is an older version without these options: run a normal update instead.
+        r = await gh(`/actions/workflows/${wf}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: 'main' }) });
+        mode = 'full';
+        setTimeout(() => toast('Tip: update your workflow file (see README) so your own stocks are included.', 5000), 5000);
+      }
       if (r.status === 401) throw new Error('Your GitHub key was rejected. Check it in Settings.');
       if (r.status === 403 || r.status === 404) throw new Error('Your GitHub key needs “Actions: Read and write” permission.');
       if (!r.ok) throw new Error(`GitHub couldn’t start the update (${r.status}).`);
@@ -237,19 +250,27 @@
         if (run) setRefreshLabel(run.status === 'queued' || run.status === 'waiting' ? 'Waiting' : 'Refreshing');
         if (run && run.status === 'completed') break;
       }
-      if (!run || run.status !== 'completed') throw new Error('Still working on it. New stories will appear when it’s done.');
+      if (!run || run.status !== 'completed') throw new Error('Still working on it. New data will appear when it’s done.');
       if (run.conclusion !== 'success') throw new Error('The update failed on GitHub. Open the Actions tab to see why.');
 
-      // Wait for GitHub Pages to publish the new stories.
+      // Wait for GitHub Pages to publish it.
       setRefreshLabel('Publishing');
       const pubDeadline = Date.now() + 8 * 60e3;
+      let fresh = false;
       while (Date.now() < pubDeadline) {
-        await load();
-        if (updated && new Date(updated).getTime() >= t0 - 60e3) break;
+        if (mode === 'stocks') {
+          const st = await stocksStamp();
+          fresh = !!st && new Date(st).getTime() >= t0 - 60e3;
+        } else {
+          await load();
+          fresh = !!updated && new Date(updated).getTime() >= t0 - 60e3;
+        }
+        if (fresh) break;
         await sleep(10000);
       }
-      const fresh = updated && new Date(updated).getTime() >= t0 - 60e3;
-      toast(fresh ? (lastRun && lastRun.added ? `Updated · ${lastRun.added} new stor${lastRun.added === 1 ? 'y' : 'ies'}` : 'Updated · you’re all caught up') : 'Update done. It may take another minute to appear.');
+      await load();
+      if (mode === 'stocks') toast(fresh ? 'Prices updated' : 'Update done. It may take another minute to appear.');
+      else toast(fresh ? (lastRun && lastRun.added ? `Updated · ${lastRun.added} new stor${lastRun.added === 1 ? 'y' : 'ies'}` : 'Updated · you’re all caught up') : 'Update done. It may take another minute to appear.');
     } catch (e) {
       toast(e.message || 'Couldn’t refresh right now.', 5500);
     } finally {
@@ -257,6 +278,7 @@
       setBusy(false);
     }
   }
+  const refreshAll = () => runUpdate(state.tab === 'stocks' ? 'stocks' : 'full');
 
   // ---------- TODAY ----------
   function storyScore(s) {
@@ -444,6 +466,10 @@
     $('#updatedNews').textContent = updated ? `Updated ${ago(updated).toLowerCase()} · next ${nextUpdateLabel()}` : 'Waiting for the first update';
     $('#sectionChips').innerHTML = SECTIONS.map(([k, l]) =>
       `<button class="chip ${state.section === k ? 'on' : ''}" data-section="${k}">${l}</button>`).join('');
+    const isRumours = state.section === 'rumours';
+    $('#rumourBox').hidden = !isRumours;
+    $('#newsList').hidden = isRumours;
+    if (isRumours) { renderRumours(); return; }
 
     const all = newsItems();
     if (!stories.length) { $('#newsList').innerHTML = empty('📰', 'No stories yet', `The first update runs ${nextUpdateLabel()}, or tap refresh.`); return; }
@@ -561,7 +587,8 @@
     const seen = store.get('rr.rumoursSeen', null);
     const fresh = seen ? stories.filter((s) => s.status === 'rumour' && (s.first_seen || '') > seen).length : 0;
     const b = $('#rumourBadge');
-    b.hidden = !fresh || state.tab === 'rumours';
+    if (!b) return;
+    b.hidden = !fresh || state.section === 'rumours';
     b.textContent = fresh > 99 ? '99+' : fresh;
   }
 
@@ -903,7 +930,7 @@
     $$('#tabbar button').forEach((b) => b.classList.toggle('on', b.dataset.tab === tab));
     $('#navbarTitle').textContent = $(`.view[data-view="${tab}"]`).dataset.title;
     window.scrollTo(0, scrollMemory[tab] || 0);
-    if (tab === 'rumours') store.set('rr.rumoursSeen', new Date().toISOString());
+    window.RR?.onTab?.(tab);
     renderBadge();
     onScroll();
   }
@@ -949,7 +976,8 @@
     const tk = e.target.closest('[data-ticker]');
     if (tk) {
       const label = pages.length ? 'Back' : $(`.view[data-view="${state.tab}"]`).dataset.title;
-      openTicker(tk.dataset.ticker, label.length > 10 ? 'Back' : label);
+      if (window.RR?.openStock) window.RR.openStock(tk.dataset.ticker, label.length > 10 ? 'Back' : label);
+      else openTicker(tk.dataset.ticker, label.length > 10 ? 'Back' : label);
       return;
     }
     const edBtn = e.target.closest('[data-edition]');
@@ -961,6 +989,7 @@
   $('#sectionChips').addEventListener('click', (e) => {
     const b = e.target.closest('[data-section]'); if (!b) return;
     state.section = b.dataset.section; state.newsLimit = PAGE_SIZE; store.set('rr.section', state.section);
+    if (state.section === 'rumours') { store.set('rr.rumoursSeen', new Date().toISOString()); renderBadge(); }
     renderNews();
   });
   $('#newsList').addEventListener('click', (e) => {
@@ -1020,6 +1049,14 @@
   // Quietly reload the latest data when you come back to the app.
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !refreshing) load(); });
   setInterval(() => { if (!document.hidden && !refreshing) load(); }, 5 * 60 * 1000);
+
+  // ---------- shared with stocks.js ----------
+  window.RR = Object.assign(window.RR || {}, {
+    $, $$, esc, store, toast, ago, chevron, empty, sectionHead, row, media, sourceLine, statusPill, logo, headline, pubTime, lead,
+    pushPage, openStory, runUpdate, hasLiveKey: () => !!store.get('rr.ghToken', '') && !!repoInfo(),
+    stories: () => stories, byId: (id) => byId.get(id), isRefreshing: () => refreshing,
+    backLabel: () => { const l = pages.length ? 'Back' : $(`.view[data-view="${state.tab}"]`).dataset.title; return l.length > 10 ? 'Back' : l; }
+  });
 
   // ---------- start ----------
   if ('serviceWorker' in navigator) {

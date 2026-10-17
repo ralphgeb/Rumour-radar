@@ -60,36 +60,46 @@
         <p class="subtitle" id="updatedNews">Loading…</p>
       </div>
       <div class="chips" id="sectionChips"></div>
+      <div id="rumourBox" hidden>
+      <div class="pad">
+          <div class="segmented" id="rumourSeg">
+            <button data-v="rumour" class="on">Open</button>
+            <button data-v="confirmed">Confirmed</button>
+            <button data-v="denied">Denied</button>
+          </div>
+          <div class="toolbar">
+            <span class="count" id="rumourCount"></span>
+            <label class="menu-btn">
+              <span id="rumourSortLabel">Latest</span>
+              <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg>
+              <select id="rumourSort" aria-label="Sort rumours">
+                <option value="latest">Latest</option>
+                <option value="likely">Most likely</option>
+                <option value="unlikely">Least likely</option>
+                <option value="impact">Biggest impact</option>
+              </select>
+            </label>
+          </div>
+        </div>
+        <div id="rumourList"></div>
+      </div>
       <div id="newsList"></div>
     </section>
 
-    <!-- RUMOURS -->
-    <section class="view" data-view="rumours" data-title="Rumours">
-      <div class="large-title">
-        <p class="eyebrow">Tech · markets · world · AI odds</p>
-        <h1>Rumours</h1>
-      </div>
-      <div class="pad">
-        <div class="segmented" id="rumourSeg">
-          <button data-v="rumour" class="on">Open</button>
-          <button data-v="confirmed">Confirmed</button>
-          <button data-v="denied">Denied</button>
+    <!-- STOCKS -->
+    <section class="view" data-view="stocks" data-title="Stocks">
+      <div class="large-title stk-title">
+        <div>
+          <p class="eyebrow" id="stkEyebrow">Markets</p>
+          <h1>Stocks</h1>
+          <p class="subtitle" id="stkAsOf">Loading…</p>
         </div>
-        <div class="toolbar">
-          <span class="count" id="rumourCount"></span>
-          <label class="menu-btn">
-            <span id="rumourSortLabel">Latest</span>
-            <svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg>
-            <select id="rumourSort" aria-label="Sort rumours">
-              <option value="latest">Latest</option>
-              <option value="likely">Most likely</option>
-              <option value="unlikely">Least likely</option>
-              <option value="impact">Biggest impact</option>
-            </select>
-          </label>
+        <div class="stk-actions">
+          <button class="pill-btn" id="stkEdit">Edit</button>
+          <button class="circle-btn" id="stkAdd" aria-label="Add a stock"><svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg></button>
         </div>
       </div>
-      <div id="rumourList"></div>
+      <div id="stockList"></div>
     </section>
 
     <!-- SETTINGS -->
@@ -189,17 +199,33 @@
     <button data-tab="news" aria-label="News">
       <svg viewBox="0 0 28 28"><rect x="4" y="5" width="17" height="18" rx="3"/><path d="M21 9h2a1.5 1.5 0 0 1 1.5 1.5V20a3 3 0 0 1-3 3"/><path d="M8 10h9M8 14h9M8 18h5" class="thin"/></svg>
       <span>News</span>
-    </button>
-    <button data-tab="rumours" aria-label="Rumours">
-      <svg viewBox="0 0 28 28"><circle cx="14" cy="14" r="2.6" class="fill"/><path d="M9.5 9.5a6.4 6.4 0 0 0 0 9M18.5 9.5a6.4 6.4 0 0 1 0 9M6 6a11.3 11.3 0 0 0 0 16M22 6a11.3 11.3 0 0 1 0 16"/></svg>
-      <span>Rumours</span>
       <i class="badge" id="rumourBadge" hidden></i>
+    </button>
+    <button data-tab="stocks" aria-label="Stocks">
+      <svg viewBox="0 0 28 28"><path d="M4 21l6-7 5 4 9-11"/><path d="M18 7h6v6"/></svg>
+      <span>Stocks</span>
     </button>
     <button data-tab="settings" aria-label="Settings">
       <svg viewBox="0 0 28 28"><path d="M11.7 3.5h4.6l.6 3a8 8 0 0 1 2 1.2l2.9-1 2.3 4-2.3 2a8 8 0 0 1 0 2.4l2.3 2-2.3 4-2.9-1a8 8 0 0 1-2 1.2l-.6 3h-4.6l-.6-3a8 8 0 0 1-2-1.2l-2.9 1-2.3-4 2.3-2a8 8 0 0 1 0-2.4l-2.3-2 2.3-4 2.9 1a8 8 0 0 1 2-1.2z"/><circle cx="14" cy="14" r="3.2"/></svg>
       <span>Settings</span>
     </button>
   </nav>
+
+  <!-- Add a stock -->
+  <dialog class="sheet" id="stkSheet">
+    <div class="sheet-grabber"></div>
+    <div class="stk-sheet">
+      <div class="stk-sheet-head">
+        <h2>Add a stock</h2>
+        <button class="pill-btn" data-close-sheet>Done</button>
+      </div>
+      <div class="search">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input id="stkSearch" type="search" placeholder="Company or ticker (e.g. ARM, Shell, BP.L)" autocomplete="off" autocapitalize="characters" spellcheck="false">
+      </div>
+      <div id="stkResults"></div>
+    </div>
+  </dialog>
 
   <!-- Welcome sheet -->
   <dialog class="sheet" id="welcome">
@@ -217,5 +243,6 @@
   <script src="app.js"></script>
   <script src="weather.js"></script>
   <script src="tube.js"></script>
+  <script src="stocks.js"></script>
 </body>
 </html>

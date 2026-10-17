@@ -35,6 +35,7 @@ const SECTION_SHARE = { Tech: 0.4, Finance: 0.35, World: 0.25 };
 const BLOCKED = /cnbc/i;
 
 import { parseFeed, findMetaImage, stripHtml } from './feed-parser.mjs';
+import { updateStocks, validSymbol } from './stocks.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -46,6 +47,8 @@ const NEWS_FILE = path.join(DATA_DIR, 'news.json');
 const SEEN_FILE = path.join(DATA_DIR, 'seen.json');
 const BRIEFING_FILE = path.join(DATA_DIR, 'briefing.json');
 const FEEDS_FILE = path.join(ROOT, 'feeds.json');
+const STOCKS_FILE = path.join(DATA_DIR, 'stocks.json');
+const WATCH_FILE = path.join(DATA_DIR, 'watchlist.json');
 
 export const TOPICS = [
   'AI', 'Apple', 'Google', 'Microsoft', 'Amazon', 'Meta', 'Nvidia', 'Tesla & EVs',
@@ -813,6 +816,32 @@ export async function main() {
   const seen = await readJSON(SEEN_FILE, []);
   const briefing = await readJSON(BRIEFING_FILE, { editions: [] });
 
+  // Stocks you added in the app arrive with the refresh (as a list of tickers).
+  let watchlist = await readJSON(WATCH_FILE, []);
+  if (process.env.WATCHLIST !== undefined && process.env.WATCHLIST !== '' ) {
+    watchlist = process.env.WATCHLIST === '-' ? [] : [...new Set(process.env.WATCHLIST.split(',').map((x) => x.trim().toUpperCase()).filter(validSymbol))].slice(0, 40);
+    await writeJSON(WATCH_FILE, watchlist);
+    log(`Watchlist: ${watchlist.join(', ') || '(empty)'}`);
+  }
+  const ai = (body) => callClaude({ model: MODEL, ...body }, apiKey);
+  const doStocks = async (summariseMode) => {
+    try {
+      const prev = await readJSON(STOCKS_FILE, null);
+      const st = await updateStocks({ prev, watchlist, stories: news.stories, ai, summariseMode });
+      await writeJSON(STOCKS_FILE, st);
+    } catch (e) {
+      if (e.fatal) { console.error('\n❌ ' + e.message + '\n'); process.exit(1); }
+      log(`Stocks update failed, keeping the previous prices: ${e.message}`);
+    }
+  };
+
+  // Quick update: stocks only (used when you add a stock or refresh the Stocks tab).
+  if ((process.env.MODE || '').toLowerCase() === 'stocks') {
+    await doStocks('missing');
+    log('Stocks-only update done.');
+    return;
+  }
+
   const fresh = await collect(feeds, seen);
   const pool = fresh.slice(0, MAX_TRIAGE);
   log(`${fresh.length} new articles found; checking ${pool.length} headlines.`);
@@ -889,6 +918,8 @@ export async function main() {
     log(`Section summaries failed: ${e.message}`);
   }
   briefing.updated = new Date().toISOString();
+
+  await doStocks('all');
 
   await writeJSON(NEWS_FILE, news);
   await writeJSON(BRIEFING_FILE, briefing);

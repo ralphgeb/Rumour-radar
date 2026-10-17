@@ -2,38 +2,26 @@
 
 Your morning and evening briefing on tech, AI, gadgets and markets, as an iPhone app. It reads more than 60 tech, finance and world news sites. Every story gets its picture, an AI summary with key points, and a full write-up in the AI's own words, plus the stocks it could move. Rumours get their own tab with AI odds on how likely each one is to be true.
 
-## Already using an older version? Update in about 10 minutes
+## Already using an older version? Update to the Stocks version (about 10 minutes)
 
 ### 1. Upload the new files
 
 1. Unzip the new `rumour-radar.zip` and open the folder.
 2. In your GitHub repository, click **Add file → Upload files**.
-3. Select everything in the folder **except the `data` folder**. Leaving out `data` keeps the stories you already have.
-   - **Mac:** Cmd-click to select.
-   - **Windows:** Ctrl-click to select.
-4. Drag the selection onto the page and click **Commit changes**. Files with the same name are replaced.
+3. Drag in everything **except the `data` folder**, including the `scripts` folder.
+4. Check that **`stocks.js`** and **`scripts/stocks.mjs`** appear in the list, then click **Commit changes**.
 
-### 2. Update the schedule (now 7:30 and 17:00 London time)
+### 2. Replace the workflow (needed for Stocks)
 
-1. In your repository, open the `setup` folder, click `update-news-workflow.yml`, and click the **Copy raw file** button (two overlapping squares).
-2. Open the `.github` folder, then `workflows`, then `update-news.yml`.
-3. Click the **pencil** icon (Edit).
-4. Select everything in the editor (**Ctrl + A** or **Cmd + A**), delete it, and paste.
-5. Check that the first line says `name: Update news`, then click **Commit changes…** and **Commit changes**.
+1. Open `setup/update-news-workflow.yml` in your repository and click **Copy raw file**.
+2. Open `.github/workflows/update-news.yml` and click the **pencil** icon.
+3. Select everything (**Ctrl + A** or **Cmd + A**), delete it, and paste.
+4. Click **Commit changes**.
 
-### 3. Make the refresh button fetch brand-new news (optional, recommended)
+### 3. Get the first prices
 
-See [Live refresh](#live-refresh-the-refresh-button) below.
-
-### 4. Get your first briefing now
-
-1. Go to **Actions → Update news → Run workflow**.
-2. Set **Write a new Today briefing?** to **yes**.
-3. Click the green **Run workflow** button.
-
-This run takes longer than before (about 5–15 minutes), because the AI now reads every article in full.
-
-The app updates itself within a couple of minutes. If it doesn't, open **Settings → Reload app**.
+1. In the app, open the **Stocks** tab and tap **refresh**. This takes about a minute.
+2. Or, on GitHub, go to **Actions → Update news → Run workflow** and set **mode** to **stocks**.
 
 ---
 
@@ -149,6 +137,8 @@ Now tapping refresh shows **Refreshing •••** while GitHub collects and ana
 
 The app has four tabs along the bottom.
 
+- **Today** opens with a **live weather card**: the current temperature and conditions, today's high and low, and the forecast every 2 hours for the next 10 hours. It updates every time you open the app. The first time, your iPhone asks for your location. If you say no, it shows London. You can switch between My location and London in **Settings → Weather**. Tap the card to refresh it.
+- Under the weather, **Tube status** shows every Tube line and the Elizabeth line, live from TfL, with the time it was updated. Lines with problems are listed first. Tap one to see why. It refreshes every time you open the app. You can hide it in **Settings → Tube status**.
 - **Today** is your tech front page. Briefings arrive at 7:30 (Morning) and 17:00 (Evening), London time. Each one has:
   - a cover headline and an overview of what happened
   - the top stories with pictures
@@ -165,12 +155,22 @@ The app has four tabs along the bottom.
   - **World** (BBC, Guardian, Sky, Al Jazeera, NYT, Reuters, Google News top stories and more)
 
   Tech, Finance and World each open with a **"today" cover**: the main topic, a short summary, the other key stories, and the stocks, indices or currencies to watch.
-- **Rumours** shows unconfirmed stories with the AI's odds that each one is true:
+- **Stocks** lists your own stocks (**My stocks**) and the **top 20 US-listed companies by market value**. Each row shows the day's mini chart, the price and the change.
+  - Tap the coloured change to switch between %, the price change and market value.
+  - Tap **+** to search for and add any stock, index, currency or crypto, using Yahoo Finance tickers (London shares end in `.L`, for example `BARC.L`). With Live refresh turned on, its price and AI summary arrive in about a minute.
+  - Tap **Edit** to remove stocks.
+  - Tap a stock to see its full page:
+    - price, with 1D, 1M and 1Y charts (touch the chart to read any point)
+    - key stats
+    - an AI **What's happening** summary
+    - every story that mentions the company
+  - Refreshing on the Stocks tab updates only the prices, which is quicker.
+- **Rumours** now lives in the **News** tab as a chip next to Tech, Finance and World. It shows unconfirmed stories with the AI's odds:
   - green: likely
   - amber: toss-up
   - red: unlikely
 
-  Switch to **Confirmed** or **Denied** to see how rumours turned out. The red badge counts new rumours since you last looked.
+  Switch to **Confirmed** or **Denied** to see how rumours turned out. A red badge on News counts new rumours.
 - **Settings** has these options:
   - **Appearance:** Automatic (follows your iPhone), Light or Dark
   - your interests
@@ -184,7 +184,7 @@ Tap any story to open it. You'll see:
 - the **market impact**: which stocks could move, up ▲ or down ▼, and by how much (●○○ low to ●●● high)
 - every outlet covering it
 
-The button at the bottom opens the original article. Tap a stock to see every story about it. Swipe from the left edge to go back.
+While reading a story, **swipe left for the next story and right for the previous one**. The order is the same as the list you opened it from. There's also an **Up next** card at the end of each story. The button at the bottom opens the original article. Tap a stock to see every story about it. Swipe from the left edge to go back.
 
 ## Changing things later (all in the browser)
 
