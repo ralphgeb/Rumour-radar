@@ -576,7 +576,7 @@
     const token = store.get('rr.ghToken', '');
     const repo = repoInfo();
     $('#repoName').textContent = repo ? `${repo.owner}/${repo.repo}` : 'Works on GitHub Pages only';
-    $('#liveStatus').textContent = token ? 'On' : 'Off';
+    $('#liveStatus').textContent = token ? 'On ✓' : 'Off · add a key below';
     $('#liveStatus').classList.toggle('on', !!token);
     $('#tokenRemove').hidden = !token;
     $('#tokenInput').placeholder = token ? 'Key saved ✓ (paste a new one to replace)' : 'Paste GitHub key (github_pat_…)';
