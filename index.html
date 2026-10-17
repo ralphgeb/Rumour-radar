@@ -44,6 +44,7 @@
     <!-- TODAY -->
     <section class="view active" data-view="today" data-title="Today">
       <div class="large-title">
+        <button class="wx wx-loading" id="weather" aria-label="Weather, tap to refresh"></button>
         <p class="eyebrow" id="todayEyebrow"></p>
         <h1>Today</h1>
       </div>
@@ -107,6 +108,17 @@
         </div>
       </div>
       <div class="group-footer">Automatic follows your iPhone’s Light/Dark setting.</div>
+
+      <div class="group-header">Weather</div>
+      <div class="group">
+        <div class="cell cell-seg">
+          <div class="segmented" id="wxSeg">
+            <button data-v="auto">My location</button>
+            <button data-v="london">London</button>
+          </div>
+        </div>
+      </div>
+      <div class="group-footer">Updates every time you open the app. Tap the weather card to refresh it. Weather data by Open-Meteo.</div>
 
       <div class="group-header">Your interests</div>
       <div class="group">
@@ -191,5 +203,6 @@
   </dialog>
 
   <script src="app.js"></script>
+  <script src="weather.js"></script>
 </body>
 </html>
