@@ -22,7 +22,7 @@ const MAX_WATCH = 40;
 // Roughly the largest US-listed companies. The top 20 are picked from these by live market value.
 // (The order here is only used if market values can't be fetched.)
 export const CANDIDATES = [
-  'NVDA', 'MSFT', 'AAPL', 'GOOGL', 'AMZN', 'META', 'AVGO', 'TSLA', 'TSM', 'BRK-B',
+  'NVDA', 'MSFT', 'AAPL', 'GOOGL', 'AMZN', 'META', 'AVGO', 'TSLA', 'SPCX', 'TSM', 'BRK-B',
   'LLY', 'JPM', 'WMT', 'V', 'ORCL', 'MA', 'XOM', 'NFLX', 'COST', 'JNJ',
   'PLTR', 'AMD', 'HD', 'PG', 'ABBV', 'BAC', 'UNH', 'ASML', 'KO', 'CRM',
   'NVO', 'SAP', 'BABA', 'TM', 'CVX', 'MU', 'GE', 'IBM', 'CSCO', 'WFC',

@@ -36,6 +36,7 @@ const BLOCKED = /cnbc/i;
 
 import { parseFeed, findMetaImage, stripHtml } from './feed-parser.mjs';
 import { updateStocks, validSymbol } from './stocks.mjs';
+import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
@@ -837,6 +838,19 @@ export async function main() {
 
   // Quick updates: 'stocks' when you add a stock or refresh the Stocks tab, 'prices' every hour on weekdays.
   const MODE = (process.env.MODE || 'full').toLowerCase();
+
+  // The worldwide stock list for the app's search box: built when missing, then once a week.
+  if (MODE !== 'prices') {
+    const SYMBOLS_FILE = path.join(DATA_DIR, 'symbols.json');
+    const st = await fs.stat(SYMBOLS_FILE).catch(() => null);
+    if (!st || Date.now() - st.mtimeMs > 7 * 86400e3 || process.env.REBUILD_SYMBOLS) {
+      await new Promise((resolve) => execFile(process.env.PYTHON || 'python3', [path.join(ROOT, 'scripts', 'build_symbols.py'), SYMBOLS_FILE], { timeout: 10 * 60e3, maxBuffer: 1 << 24 }, (err, out, errOut) => {
+        if (out) process.stdout.write(out);
+        if (err) log(`Stock list not rebuilt: ${(errOut || err.message).split('\n').filter(Boolean).slice(-2).join(' | ')}`);
+        resolve();
+      }));
+    }
+  }
   if (MODE === 'stocks' || MODE === 'prices') {
     await doStocks(MODE === 'prices' ? 'prices' : 'missing');
     log(`${MODE === 'prices' ? 'Hourly prices' : 'Stocks-only'} update done.`);

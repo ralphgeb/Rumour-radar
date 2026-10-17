@@ -161,7 +161,7 @@ The app has four tabs along the bottom.
   Tech, Finance and World each open with a **"today" cover**: the main topic, a short summary, the other key stories, and the stocks, indices or currencies to watch.
 - **Stocks** lists your own stocks (**My stocks**) and the **top 20 US-listed companies by market value**. Each row shows the day's mini chart, the price and the change.
   - Tap the coloured change to switch between %, the price change and market value.
-  - Tap **+** to search for and add any stock, index, currency or crypto, using Yahoo Finance tickers (London shares end in `.L`, for example `BARC.L`). With Live refresh turned on, its price and AI summary arrive in about a minute.
+  - Tap **+** to search about 25,000 stocks, funds, indices, currencies and cryptos worldwide **by company name or ticker**, for example "Scottish Mortgage", "SpaceX" or "BARC.L". The list comes from the free FinanceDatabase project and is refreshed weekly by GitHub. With Live refresh turned on, its price and AI summary arrive in about a minute.
   - Tap **Edit** to remove stocks.
   - Tap a stock to see its full page:
     - price, with 1D, 1M and 1Y charts (touch the chart to read any point)

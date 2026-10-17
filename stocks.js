@@ -10,7 +10,7 @@
   // Popular stocks for the search box (any other Yahoo Finance ticker can be typed in).
   const CATALOG = [
     ['AAPL', 'Apple'], ['MSFT', 'Microsoft'], ['NVDA', 'NVIDIA'], ['GOOGL', 'Alphabet (Google)'], ['AMZN', 'Amazon'], ['META', 'Meta Platforms'],
-    ['TSLA', 'Tesla'], ['AVGO', 'Broadcom'], ['TSM', 'TSMC'], ['BRK-B', 'Berkshire Hathaway'], ['LLY', 'Eli Lilly'], ['JPM', 'JPMorgan Chase'],
+    ['TSLA', 'Tesla'], ['SPCX', 'SpaceX'], ['SMT.L', 'Scottish Mortgage Investment Trust'], ['AVGO', 'Broadcom'], ['TSM', 'TSMC'], ['BRK-B', 'Berkshire Hathaway'], ['LLY', 'Eli Lilly'], ['JPM', 'JPMorgan Chase'],
     ['V', 'Visa'], ['MA', 'Mastercard'], ['WMT', 'Walmart'], ['ORCL', 'Oracle'], ['XOM', 'Exxon Mobil'], ['NFLX', 'Netflix'], ['COST', 'Costco'],
     ['JNJ', 'Johnson & Johnson'], ['PLTR', 'Palantir'], ['AMD', 'AMD'], ['HD', 'Home Depot'], ['PG', 'Procter & Gamble'], ['ABBV', 'AbbVie'],
     ['BAC', 'Bank of America'], ['UNH', 'UnitedHealth'], ['KO', 'Coca-Cola'], ['PEP', 'PepsiCo'], ['CRM', 'Salesforce'], ['ADBE', 'Adobe'],
@@ -354,49 +354,104 @@
   }
 
   // ---------- search sheet ----------
+  // Searches a worldwide list of stocks, ETFs, indices, crypto and currencies (data/symbols.json,
+  // built from FinanceDatabase on GitHub) by company name or ticker.
   let searchSeq = 0;
+  let db = null;          // [{s, n, x, c, t, w}] — symbol, name, exchange label, size rank, type, words
+  let dbLoading = null;
+  const norm = (t) => String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/&/g, ' and ').replace(/[^a-z0-9]+/g, ' ').trim();
+  const STOP = new Set(['inc', 'plc', 'ltd', 'corp', 'corporation', 'co', 'company', 'the', 'sa', 'ag', 'nv', 'se', 'holdings', 'group', 'limited']);
+  const TYPE = { E: '', F: 'ETF', I: 'Index', C: 'Crypto', X: '' };
+
+  function entry(s, n, x, c, t, alias) {
+    const nn = norm(n);
+    const an = alias ? norm(alias) : '';
+    return { s, S: s.toUpperCase(), n, x, c, t, nn, an, w: (nn + (an ? ' ' + an : '')).split(' ') };
+  }
+  function loadDb() {
+    if (db || dbLoading) return dbLoading;
+    dbLoading = fetch('data/symbols.json', { cache: 'no-store' }).then((r) => (r.ok ? r.json() : null)).then((j) => {
+      const list = [];
+      const seen = new Set();
+      const alias = new Map(CATALOG);
+      // the worldwide list, with friendlier names from our own list as extra search words (e.g. "SpaceX")
+      if (j && Array.isArray(j.s)) {
+        for (const [sym, name, xi, cap, t] of j.s) {
+          if (seen.has(sym)) continue;
+          seen.add(sym);
+          list.push(entry(sym, name, j.exchanges?.[xi] || '', alias.has(sym) ? Math.max(cap, 4) : cap, t, alias.get(sym)));
+        }
+      }
+      for (const [sym, name] of CATALOG) if (!seen.has(sym)) list.push(entry(sym, name, '', 4, 'E'));
+      db = list;
+      return db;
+    }).catch(() => { db = CATALOG.map(([s, n]) => entry(s, n, '', 4, 'E')); return db; });
+    return dbLoading;
+  }
+  const exchLabel = (sym, x) => x || (sym.endsWith('.L') ? 'London' : sym.startsWith('^') ? 'Index' : /-USD$|-GBP$/.test(sym) ? 'Crypto' : '');
+
+  function score(e, Q, qn, qw) {
+    const bare = e.S.split(/[.\-]/)[0];
+    let sc = -1;
+    if (e.S === Q) sc = 1000;
+    else if (bare === Q) sc = 950;
+    else if (e.S.startsWith(Q)) sc = 800 - (e.S.length - Q.length) * 5;
+    if (qn) {
+      if (e.nn === qn || e.an === qn) sc = Math.max(sc, 900);
+      else if (e.nn.startsWith(qn) || (e.an && e.an.startsWith(qn))) sc = Math.max(sc, 700);
+      else if (qw.every((w) => e.w.some((x) => x.startsWith(w)))) sc = Math.max(sc, 520 + (e.w[0].startsWith(qw[0]) ? 60 : 0));
+      else if (qn.length >= 4 && e.nn.includes(qn)) sc = Math.max(sc, 300);
+    }
+    if (sc < 0) return -1;
+    // bigger companies and main US / London listings first
+    return sc + e.c * 18 + (e.t === 'E' ? 6 : 0) + (/^(Nasdaq|NYSE|London)$/.test(e.x) ? 8 : 0);
+  }
   function results(qs) {
     const q = qs.trim();
     const Q = q.toUpperCase();
-    const known = new Map(CATALOG);
-    for (const [s, v] of Object.entries(data?.quotes || {})) if (!known.has(s)) known.set(s, v.name);
-    let list = [...known.entries()];
-    if (q) {
-      list = list.filter(([s, n]) => s.startsWith(Q) || n.toUpperCase().includes(Q))
-        .sort((a, b) => (b[0] === Q) - (a[0] === Q) || (b[0].startsWith(Q)) - (a[0].startsWith(Q)) || a[0].length - b[0].length);
-    } else {
-      list = list.filter(([s]) => !(data?.top || []).includes(s)).slice(0, 30);
+    const qn = norm(q);
+    const qw = qn.split(' ').filter((w) => w && !STOP.has(w));
+    const list = db || CATALOG.map(([s, n]) => entry(s, n, '', 4, 'E'));
+    if (!q) return list.filter((e) => !(data?.top || []).includes(e.s)).slice(0, 30);
+    const hits = [];
+    for (const e of list) {
+      const sc = score(e, Q, qn, qw.length ? qw : [qn]);
+      if (sc >= 0) hits.push([sc, e]);
     }
-    list = list.slice(0, 40);
-    if (q && validSymbol(Q) && !list.some(([s]) => s === Q)) list.unshift([Q, 'Add this ticker']);
-    return list;
+    hits.sort((a, b) => b[0] - a[0]);
+    const out = hits.slice(0, 50).map((h) => h[1]);
+    // Offer the typed text as a ticker only when it looks like one (short, or with . ^ = -).
+    if (validSymbol(Q) && (Q.length <= 5 || /[.^=\-]/.test(Q) || /\d/.test(Q)) && !out.some((e) => e.S === Q)) out.push(entry(Q, 'Add this exact ticker', '', 0, 'E'));
+    return out;
   }
-  function renderResults(list) {
-    $('#stkResults').innerHTML = list.length ? `<div class="list">${list.map(([s, n]) => {
-      const on = watch.includes(s);
-      return `<button class="stk-res" data-add="${esc(s)}"><div class="stk-id"><b>${esc(s)}</b><span>${esc(n)}</span></div><span class="add ${on ? 'on' : ''}">${on ? '✓' : '+'}</span></button>`;
-    }).join('')}</div>` : '<p class="sd-none">No matches. Type the exact ticker as used on Yahoo Finance.</p>';
+  function renderResults(list, q) {
+    const box = $('#stkResults');
+    if (!list.length) {
+      box.innerHTML = `<p class="sd-none">Nothing found for “${esc(q)}”. If it’s a private company (like OpenAI or Stripe) it has no shares to follow. Otherwise try the company’s full name or its ticker.</p>`;
+      return;
+    }
+    box.innerHTML = `<div class="list">${list.map((e) => {
+      const on = watch.includes(e.s);
+      const meta = [exchLabel(e.s, e.x), TYPE[e.t]].filter(Boolean).join(' · ');
+      return `<button class="stk-res" data-add="${esc(e.s)}"><div class="stk-id"><b>${esc(e.s)}${meta ? ` <i class="ex">${esc(meta)}</i>` : ''}</b><span>${esc(e.n)}</span></div><span class="add ${on ? 'on' : ''}">${on ? '✓' : '+'}</span></button>`;
+    }).join('')}</div>`;
   }
-  async function liveSearch(q, seq) {
-    // Uses Yahoo's search when the phone can reach it; otherwise the built-in list is enough.
-    if (q.length < 2 || liveOK === false) return;
-    try {
-      const ctrl = new AbortController(); setTimeout(() => ctrl.abort(), 3000);
-      const r = await fetch(`https://query2.finance.yahoo.com/v1/finance/search?q=${encodeURIComponent(q)}&quotesCount=10&newsCount=0`, { signal: ctrl.signal });
-      const j = await r.json();
-      if (seq !== searchSeq) return;
-      const extra = (j.quotes || []).filter((x) => x.symbol && (x.shortname || x.longname)).map((x) => [x.symbol.toUpperCase(), `${x.shortname || x.longname}${x.exchDisp ? ` (${x.exchDisp})` : ''}`]);
-      const merged = results(q);
-      for (const e of extra) if (!merged.some(([s]) => s === e[0])) merged.push(e);
-      renderResults(merged.slice(0, 40));
-    } catch { /* not available on this phone */ }
+  function runSearch() {
+    const q = $('#stkSearch').value;
+    renderResults(results(q), q);
+    $('#stkResults').scrollTop = 0;
   }
   function openSheet() {
     const sh = $('#stkSheet');
     $('#stkSearch').value = '';
-    renderResults(results(''));
+    $('#stkHint').textContent = db ? '' : 'Loading the worldwide stock list…';
+    renderResults(results(''), '');
     sh.showModal();
     setTimeout(() => $('#stkSearch').focus(), 250);
+    loadDb().then(() => {
+      $('#stkHint').textContent = db.length > 500 ? `Search ${db.length.toLocaleString('en-GB')} stocks, funds, indices and currencies by name or ticker` : 'The full stock list arrives with the next update. You can still type any Yahoo Finance ticker.';
+      runSearch();
+    });
   }
 
   // ---------- events ----------
@@ -413,12 +468,9 @@
       const row = e.target.closest('[data-stock]');
       if (row && !editing) openStock(row.dataset.stock, 'Stocks');
     });
-    $('#stkSearch').addEventListener('input', (e) => {
-      const q = e.target.value;
-      const seq = ++searchSeq;
-      renderResults(results(q));
-      clearTimeout(e.target._t);
-      e.target._t = setTimeout(() => liveSearch(q, seq), 350);
+    $('#stkSearch').addEventListener('input', () => {
+      clearTimeout(runSearch._t);
+      runSearch._t = setTimeout(runSearch, 90);
     });
     $('#stkResults').addEventListener('click', (e) => {
       const b = e.target.closest('[data-add]'); if (!b) return;
