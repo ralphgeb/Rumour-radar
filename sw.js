@@ -1,6 +1,6 @@
 // Offline support: the app shell is cached, the news is always fetched fresh
 // when there is a connection and falls back to the last copy when offline.
-const VERSION = 'rr-v11';
+const VERSION = 'rr-v12';
 const SHELL = ['./', 'index.html', 'styles.css', 'app.js', 'weather.js', 'tube.js', 'manifest.json', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {

@@ -669,62 +669,95 @@
   }
 
   // Swipe left / right on a story to move to the next / previous one in the list it came from.
+  // The current story follows your finger and the neighbouring one slides in beside it.
+  const EASE = 'cubic-bezier(.25,.9,.3,1)';
+  function neighbour(page, dir) {
+    const j = page._seq.indexOf(page._sid) + dir;
+    return j >= 0 && j < page._seq.length && byId.get(page._seq[j]) ? page._seq[j] : null;
+  }
+  function makePeek(page, sid) {
+    const peek = document.createElement('div');
+    peek.className = 'page-inner peek';
+    peek.innerHTML = storyPage(byId.get(sid), page._o.backLabel, page._seq).html;
+    const barH = $('.page-bar', page).offsetHeight;
+    peek.style.cssText = `position:absolute;left:0;width:100%;top:${page.scrollTop}px;height:${page.clientHeight}px;overflow:hidden;padding-top:${barH}px;box-sizing:border-box;background:var(--bg);`;
+    $('.page-inner', page).after(peek);
+    return peek;
+  }
+  function setX(el, x, anim) {
+    el.style.transition = anim ? `transform ${anim}ms ${EASE}` : 'none';
+    el.style.transform = x ? `translate3d(${x}px,0,0)` : '';
+  }
+  function finishStep(page, sid, peek) {
+    const main = $('.page-inner', page);
+    page._sid = sid;
+    fillPage(page, storyPage(byId.get(sid), page._o.backLabel, page._seq));
+    page.scrollTop = 0;
+    setX(main, 0);
+    peek?.remove();
+    page._busy = false;
+  }
+
   function enableStorySwipe(page) {
-    let x0 = null, y0 = 0, dx = 0, mode = null;
-    const inner = () => $('.page-inner', page);
+    let x0 = null, y0 = 0, dx = 0, mode = null, peek = null, peekDir = 0, t0 = 0;
+    const W = () => page.clientWidth;
     page.addEventListener('touchstart', (e) => {
       const t = e.touches[0];
-      if (t.clientX < 28 || e.touches.length > 1) { x0 = null; return; } // left edge = back
-      x0 = t.clientX; y0 = t.clientY; dx = 0; mode = null;
+      if (page._busy || t.clientX < 28 || e.touches.length > 1) { x0 = null; return; } // left edge = back
+      x0 = t.clientX; y0 = t.clientY; dx = 0; mode = null; t0 = Date.now();
     }, { passive: true });
     page.addEventListener('touchmove', (e) => {
       if (x0 === null) return;
       const t = e.touches[0];
       dx = t.clientX - x0;
       const dy = t.clientY - y0;
-      if (!mode && (Math.abs(dx) > 12 || Math.abs(dy) > 12)) mode = Math.abs(dx) > Math.abs(dy) * 1.4 ? 'h' : 'v';
+      if (!mode && (Math.abs(dx) > 10 || Math.abs(dy) > 10)) mode = Math.abs(dx) > Math.abs(dy) ? 'h' : 'v';
       if (mode !== 'h') return;
-      const i = page._seq.indexOf(page._sid);
-      const atEnd = (dx < 0 && i >= page._seq.length - 1) || (dx > 0 && i <= 0);
-      const el = inner();
-      el.style.transition = 'none';
-      el.style.transform = `translateX(${dx * (atEnd ? 0.15 : 0.45)}px)`;
-      el.style.opacity = String(1 - Math.min(Math.abs(dx) / 900, 0.25));
-    }, { passive: true });
+      e.preventDefault(); // stop the page scrolling up/down while swiping sideways
+      const dir = dx < 0 ? 1 : -1;
+      const sid = neighbour(page, dir);
+      if (dir !== peekDir) { peek?.remove(); peek = sid ? makePeek(page, sid) : null; peekDir = dir; }
+      const main = $('.page-inner', page);
+      if (!peek) { setX(main, dx * 0.25); return; } // nothing there: gentle rubber band
+      setX(main, dx);
+      setX(peek, dx + dir * W());
+    }, { passive: false });
     page.addEventListener('touchend', () => {
       if (x0 === null) return;
       x0 = null;
-      const el = inner();
-      if (mode === 'h' && Math.abs(dx) > 70) { stepStory(page, dx < 0 ? 1 : -1, true); return; }
-      el.style.transition = 'transform .25s ease, opacity .25s ease';
-      el.style.transform = ''; el.style.opacity = '';
+      const main = $('.page-inner', page);
+      if (mode !== 'h') return;
+      const fast = Math.abs(dx) > 40 && Date.now() - t0 < 250;
+      const dir = peekDir;
+      if (peek && (Math.abs(dx) > W() * 0.25 || fast)) {
+        const p = peek, sid = page._seq[page._seq.indexOf(page._sid) + dir];
+        page._busy = true;
+        setX(main, -dir * W(), 300);
+        setX(p, 0.0001, 300);
+        setTimeout(() => finishStep(page, sid, p), 310);
+      } else {
+        setX(main, 0, 250);
+        if (peek) { const p = peek; setX(p, dir * W(), 250); setTimeout(() => p.remove(), 260); }
+        if (!peek && Math.abs(dx) > 70) toast(dir > 0 ? 'That’s the last story in this list' : 'That’s the first story in this list', 1600);
+      }
+      peek = null; peekDir = 0; mode = null;
     });
   }
 
-  function stepStory(page, delta, fromSwipe) {
-    const i = page._seq.indexOf(page._sid);
-    const j = i + delta;
-    const el = $('.page-inner', page);
-    if (j < 0 || j >= page._seq.length || !byId.get(page._seq[j])) {
-      el.style.transition = 'transform .25s ease, opacity .25s ease';
-      el.style.transform = ''; el.style.opacity = '';
-      toast(delta > 0 ? 'That’s the last story in this list' : 'That’s the first story in this list', 1800);
-      return;
-    }
-    el.style.transition = 'transform .16s ease-in, opacity .16s ease-in';
-    el.style.transform = `translateX(${delta > 0 ? -40 : 40}%)`;
-    el.style.opacity = '0';
-    setTimeout(() => {
-      page._sid = page._seq[j];
-      fillPage(page, storyPage(byId.get(page._sid), page._o.backLabel, page._seq));
-      page.scrollTop = 0;
-      el.style.transition = 'none';
-      el.style.transform = `translateX(${delta > 0 ? 40 : -40}%)`;
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        el.style.transition = 'transform .28s cubic-bezier(.2,.8,.2,1), opacity .28s ease';
-        el.style.transform = ''; el.style.opacity = '';
-      }));
-    }, fromSwipe ? 120 : 160);
+  // Used by the "Up next" card: the same slide, without a finger.
+  function stepStory(page, delta) {
+    if (page._busy) return;
+    const sid = neighbour(page, delta);
+    if (!sid) { toast(delta > 0 ? 'That’s the last story in this list' : 'That’s the first story in this list', 1600); return; }
+    page._busy = true;
+    const main = $('.page-inner', page);
+    const peek = makePeek(page, sid);
+    setX(peek, delta * page.clientWidth);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      setX(main, -delta * page.clientWidth, 340);
+      setX(peek, 0.0001, 340);
+      setTimeout(() => finishStep(page, sid, peek), 350);
+    }));
   }
 
   function impactDots(level) {

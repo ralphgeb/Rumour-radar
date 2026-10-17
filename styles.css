@@ -666,7 +666,8 @@ dialog.sheet[open] { animation: sheetUp .4s cubic-bezier(.2,.8,.2,1); }
 .tb-rest { display: flex; justify-content: space-between; gap: 8px; border-top: .5px solid var(--sep); padding: 8px 0 10px; font-size: 12.5px; color: var(--label-2); }
 
 /* ---------- Up next + swipe hint on stories ---------- */
-.page-inner { touch-action: pan-y; will-change: transform; }
+.page-inner { will-change: transform; backface-visibility: hidden; }
+.page { overflow-x: hidden; }
 .swipe-hint { margin: 22px 32px 8px; font-size: 12.5px; color: var(--label-3); text-align: center; }
 .next-card {
   display: grid; grid-template-columns: 1fr 76px; gap: 12px; align-items: center;
