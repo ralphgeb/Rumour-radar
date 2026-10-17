@@ -45,6 +45,7 @@
     <section class="view active" data-view="today" data-title="Today">
       <div class="large-title">
         <button class="wx wx-loading" id="weather" aria-label="Weather, tap to refresh"></button>
+        <section class="tube" id="tube" aria-label="Tube status"></section>
         <p class="eyebrow" id="todayEyebrow"></p>
         <h1>Today</h1>
       </div>
@@ -119,6 +120,17 @@
         </div>
       </div>
       <div class="group-footer">Updates every time you open the app. Tap the weather card to refresh it. Weather data by Open-Meteo.</div>
+
+      <div class="group-header">Tube status</div>
+      <div class="group">
+        <div class="cell cell-seg">
+          <div class="segmented" id="tubeSeg">
+            <button data-v="show">Show on Today</button>
+            <button data-v="hide">Hide</button>
+          </div>
+        </div>
+      </div>
+      <div class="group-footer">Live from TfL every time you open the app, and every 5 minutes while it’s open.</div>
 
       <div class="group-header">Your interests</div>
       <div class="group">
@@ -204,5 +216,6 @@
 
   <script src="app.js"></script>
   <script src="weather.js"></script>
+  <script src="tube.js"></script>
 </body>
 </html>
