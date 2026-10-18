@@ -137,6 +137,17 @@ Tapping refresh (or pulling down) updates the **Tube and weather** straight away
 
 ---
 
+## Pictures from WSJ, Reuters and Barron's (optional, about $4 a month)
+
+These sites block automatic tools, so their pictures are found through news search engines instead. DuckDuckGo is tried first (free). For the rest, you can add a **Brave Search** key:
+
+1. Go to **api-dashboard.search.brave.com**, sign up, and choose the **Search** plan (it includes $5 of free use a month; you'll need a card).
+2. Set a monthly limit there (for example $10) so it can never cost more.
+3. Create an API key and copy it.
+4. On GitHub: **Settings → Secrets and variables → Actions → New repository secret**. Name: `BRAVE_API_KEY`, Secret: paste the key.
+
+Without the key, everything still works; those stories just keep their coloured box when DuckDuckGo finds nothing.
+
 ## Morning notifications
 
 Rumour Radar can send a notification at about 7:00 each morning with a catchy one-line teaser of your Today topic.
