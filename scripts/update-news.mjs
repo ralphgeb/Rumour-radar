@@ -18,19 +18,25 @@
 // You normally never need to touch this file. Settings you might change:
 const MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-5-5';
 const BRIEFING_MODEL = process.env.BRIEFING_MODEL || MODEL;
-const MAX_NEW_PER_RUN = Number(process.env.MAX_NEW_PER_RUN || 150); // stories analysed in full per run (caps cost)
-const MAX_TRIAGE = 900;        // headlines checked in the quick first pass
+const MAX_NEW_PER_RUN = Number(process.env.MAX_NEW_PER_RUN || 152); // stories analysed per run: 38 for each of the 4 sections (caps cost)
+const MAX_TRIAGE = 1200;       // headlines checked in the quick first pass
 const TRIAGE_BATCH = 60;       // headlines per quick-pass request
 const BATCH_SIZE = 6;          // articles per full-analysis request
-const PARALLEL = 3;            // AI requests running at the same time
+// Batch mode (scheduled updates): requests go through Anthropic's Message Batches
+// API at half price. It can take a while, so the daily update starts at 5:00.
+const USE_BATCH = /^(1|true|yes)$/i.test(process.env.AI_BATCH || '');
+const BATCH_WAIT_MIN = Number(process.env.BATCH_WAIT_MIN || 25); // after this, unfinished requests are sent normally
+const PARALLEL = USE_BATCH ? 100 : 3; // AI requests running at the same time
 const MAX_ARTICLE_AGE_H = 30;  // ignore articles older than this
+const FASHION_AGE_H = 72;      // fashion sites publish less often, so look further back
+const SECTION_MIN = 100;       // each section's fair share of MAX_STORIES
 const KEEP_DAYS = 4;           // drop stories older than this
-const MAX_STORIES = 600;       // keep the data file small and fast
+const MAX_STORIES = 400;       // stories kept in the app, shared equally between sections
 const MAX_SEEN = 8000;         // how many article links to remember
 const ARTICLE_CHARS = 6000;    // how much of each article the AI reads
 const UPGRADE_MAX = 20;        // older stories per run that get key points added
 // Share of each run's full analyses per section, so no section crowds out the others.
-const SECTION_SHARE = { Tech: 0.35, Finance: 0.27, World: 0.2, Fashion: 0.18 };
+const SECTION_SHARE = { Tech: 0.25, Finance: 0.25, World: 0.25, Fashion: 0.25 };
 // Sources that never appear in the app.
 const BLOCKED = /cnbc/i;
 const FASHION_OUTLETS = /WWD|Business of Fashion|Vogue|Harper's Bazaar|Fashionista|Highsnobiety|Hypebeast|Telegraph Fashion|Guardian Fashion/i;
@@ -138,12 +144,13 @@ export async function collect(feeds, seen) {
     else log(`${feeds[i].name}: failed (${r.reason?.message || r.reason})`);
   });
   const cutoff = Date.now() - MAX_ARTICLE_AGE_H * 3600e3;
+  const fashionCutoff = Date.now() - FASHION_AGE_H * 3600e3;
   const seenSet = new Set(seen);
   const unique = new Map();
   for (const a of all) {
     if (BLOCKED.test(a.source) || BLOCKED.test(a.link)) continue;
     if (seenSet.has(a.link) || unique.has(a.link)) continue;
-    if (new Date(a.published).getTime() < cutoff) continue;
+    if (new Date(a.published).getTime() < (a.section === 'Fashion' ? fashionCutoff : cutoff)) continue;
     unique.set(a.link, a);
   }
   return [...unique.values()].sort((a, b) => b.published.localeCompare(a.published));
@@ -222,6 +229,7 @@ const ANALYSIS_TOOL = {
             signals: { type: 'array', items: { type: 'string' }, description: 'Short credibility signals for rumours, e.g. "Reliable source: Bloomberg", "Single anonymous source", "Company declined to comment". Empty for news.' },
             topics: { type: 'array', items: { type: 'string', enum: TOPICS } },
             overall_impact: { type: 'string', enum: ['none', 'low', 'medium', 'high'], description: 'Likely market impact (if a rumour: if it turns out true).' },
+            importance: { type: 'integer', description: 'How important this story is for a general reader of its section, 1-10: 9-10 = major news everyone is talking about (big launches, major deals, elections, wars, central bank moves); 6-8 = notable; 3-5 = routine; 1-2 = minor (reviews, how-tos, small updates). Be strict.' },
             market_take: { type: 'string', description: 'One short sentence on how this could affect investors or the stocks below. Empty string if there is no market angle.' },
             stocks: {
               type: 'array',
@@ -239,7 +247,7 @@ const ANALYSIS_TOOL = {
               }
             }
           },
-          required: ['article_index', 'keep', 'same_story_as', 'status', 'claim', 'summary', 'key_points', 'likelihood', 'likelihood_reason', 'signals', 'topics', 'overall_impact', 'market_take', 'stocks']
+          required: ['article_index', 'keep', 'same_story_as', 'status', 'claim', 'summary', 'key_points', 'likelihood', 'likelihood_reason', 'signals', 'topics', 'overall_impact', 'importance', 'market_take', 'stocks']
         }
       }
     },
@@ -269,6 +277,78 @@ Stock impact (for news AND rumours): think about the company itself, competitors
 Analyse every article in the batch and call record_analysis exactly once.`;
 
 async function callClaude(body, apiKey) {
+  if (USE_BATCH) return batchCall(body, apiKey);
+  return callDirect(body, apiKey);
+}
+
+// ---------- Batch mode ----------
+// Requests made at the same moment are collected and sent as one batch; each
+// caller gets its own answer back. Anything not finished within BATCH_WAIT_MIN
+// (or that fails) is sent again the normal way, so an update is never stuck.
+const batchQueue = [];
+let batchTimer = null;
+const API = 'https://api.anthropic.com/v1/messages';
+const apiHeaders = (apiKey) => ({ 'content-type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' });
+let batchStats = { sent: 0, done: 0, fallback: 0 };
+
+function batchCall(body, apiKey) {
+  return new Promise((resolve, reject) => {
+    batchQueue.push({ body: withCache(body), resolve, reject, apiKey });
+    if (!batchTimer) batchTimer = setTimeout(flushBatch, 1500);
+  });
+}
+
+async function flushBatch() {
+  batchTimer = null;
+  const items = batchQueue.splice(0);
+  if (!items.length) return;
+  const apiKey = items[0].apiKey;
+  const direct = (list) => Promise.all(list.map((it) => { batchStats.fallback++; return callDirect(it.body, apiKey).then(it.resolve, it.reject); }));
+  let batch;
+  try {
+    const res = await fetch(`${API}/batches`, { method: 'POST', headers: apiHeaders(apiKey), body: JSON.stringify({ requests: items.map((it, i) => ({ custom_id: `r${i}`, params: it.body })) }) });
+    batch = await res.json();
+    if (!res.ok) {
+      const msg = batch?.error?.message || res.statusText;
+      if (res.status === 401) { const e = Object.assign(new Error('Your Anthropic API key was rejected. Check the ANTHROPIC_API_KEY secret on GitHub.'), { fatal: true }); items.forEach((it) => it.reject(e)); return; }
+      if (/credit/i.test(msg)) { const e = Object.assign(new Error('Your Anthropic account is out of credit. Add credit at console.anthropic.com.'), { fatal: true }); items.forEach((it) => it.reject(e)); return; }
+      throw new Error(`batch ${res.status}: ${msg}`);
+    }
+  } catch (e) { log(`Batch not accepted (${e.message}); sending normally.`); return direct(items); }
+  batchStats.sent += items.length;
+  log(`AI batch of ${items.length} request(s) sent (half price); waiting for it…`);
+  const t0 = Date.now();
+  let status = batch;
+  while (status.processing_status !== 'ended' && Date.now() - t0 < BATCH_WAIT_MIN * 60e3) {
+    await new Promise((r) => setTimeout(r, 15000));
+    try { status = await (await fetch(`${API}/batches/${batch.id}`, { headers: apiHeaders(apiKey) })).json(); } catch { /* keep waiting */ }
+  }
+  const results = new Map();
+  if (status.processing_status !== 'ended') {
+    log(`Batch still running after ${BATCH_WAIT_MIN} min; cancelling it and sending the rest normally.`);
+    fetch(`${API}/batches/${batch.id}/cancel`, { method: 'POST', headers: apiHeaders(apiKey) }).catch(() => {});
+  } else {
+    try {
+      const txt = await (await fetch(status.results_url, { headers: apiHeaders(apiKey) })).text();
+      for (const line of txt.split('\n')) {
+        if (!line.trim()) continue;
+        try { const r = JSON.parse(line); results.set(r.custom_id, r.result); } catch { /* skip */ }
+      }
+    } catch (e) { log(`Batch results not read: ${e.message}`); }
+    log(`AI batch finished in ${Math.round((Date.now() - t0) / 60e3)} min.`);
+  }
+  const retry = [];
+  items.forEach((it, i) => {
+    const r = results.get(`r${i}`);
+    const tool = r?.type === 'succeeded' ? (r.message?.content || []).find((c) => c.type === 'tool_use') : null;
+    if (tool?.input) { batchStats.done++; it.resolve(tool.input); } else retry.push(it);
+  });
+  if (retry.length) await direct(retry);
+}
+
+const withCache = (body) => (typeof body.system === 'string' ? { ...body, system: [{ type: 'text', text: body.system, cache_control: { type: 'ephemeral' } }] } : body);
+
+async function callDirect(body, apiKey) {
   // Cache the long, repeated instructions so later requests in the run are cheaper and faster.
   if (typeof body.system === 'string') body = { ...body, system: [{ type: 'text', text: body.system, cache_control: { type: 'ephemeral' } }] };
   let lastErr;
@@ -441,6 +521,7 @@ export function sanitise(an) {
     signals: (an.signals || []).map((s) => trim(s, 80)).filter(Boolean).slice(0, 6),
     topics: topics.length ? topics : ['Other'],
     overall_impact: IMPACT_RANK[an.overall_impact] !== undefined ? an.overall_impact : 'low',
+    importance: Math.max(1, Math.min(10, Math.round(Number(an.importance) || 4))),
     market_take: trim(an.market_take, 240),
     stocks
   };
@@ -489,6 +570,7 @@ export function mergeBatch(stories, batch, analyses, now = new Date().toISOStrin
       target.signals = [...new Set([...clean.signals, ...(target.signals || [])])].slice(0, 8);
       target.topics = [...new Set([...target.topics, ...clean.topics])].filter((t) => t !== 'Other' || target.topics.length === 1);
       if (IMPACT_RANK[clean.overall_impact] > IMPACT_RANK[target.overall_impact]) target.overall_impact = clean.overall_impact;
+      if ((clean.importance || 0) > (target.importance || 0)) target.importance = clean.importance;
       if (!target.image && art.image) target.image = art.image;
       if (!target.market_take && clean.market_take) target.market_take = clean.market_take;
       const tickers = new Set(target.stocks.map((s) => s.ticker));
@@ -581,7 +663,7 @@ export async function makeBriefing(stories, apiKey, now = new Date()) {
   const input = await callClaude({
     model: BRIEFING_MODEL,
     max_tokens: 4000,
-    system: `You are the editor of "Rumour Radar", a twice-daily TECH briefing (tech, AI, gadgets, big tech companies, startups and VC, and tech stocks). Write the ${edition.toLowerCase()} briefing covering the last ${edition === 'Morning' ? 'night and early morning' : 'day'} for a busy reader. Pick what genuinely matters (big launches, deals, earnings, regulation, AI breakthroughs, market moves, credible rumours), not minor product reviews. Use only story ids from the list. Be neutral, clear, British English, in your own words. Call record_briefing once.`,
+    system: `You are the editor of "Rumour Radar", a daily morning TECH briefing (tech, AI, gadgets, big tech companies, startups and VC, and tech stocks). Write the ${edition.toLowerCase()} briefing covering the last 24 hours for a busy reader. Pick what genuinely matters (big launches, deals, earnings, regulation, AI breakthroughs, market moves, credible rumours), not minor product reviews. Use only story ids from the list. Be neutral, clear, British English, in your own words. Call record_briefing once.`,
     tools: [BRIEFING_TOOL],
     tool_choice: { type: 'tool', name: 'record_briefing' },
     messages: [{ role: 'user', content: `Stories (id | status | outlets | impact | section | headline, then summary):\n${list}` }]
@@ -645,8 +727,7 @@ export async function upgradeOld(stories, apiKey) {
   });
   await readArticles(arts);
   let done = 0;
-  for (let i = 0; i < arts.length; i += BATCH_SIZE) {
-    const batch = arts.slice(i, i + BATCH_SIZE);
+  await Promise.all(chunk(arts, BATCH_SIZE).map(async (batch) => {
     try {
       const analyses = await analyseBatch(batch, [], apiKey);
       for (const an of analyses) {
@@ -666,7 +747,7 @@ export async function upgradeOld(stories, apiKey) {
       log(`Upgrade batch skipped: ${e.message}`);
     }
     batch.forEach((a) => { a.story.upgrade_tried = true; a.story.image_checked = true; });
-  }
+  }));
   log(`Upgraded ${done} older stories with key points; checked ${needImage.length} for pictures.`);
 }
 
@@ -687,8 +768,10 @@ export function pickFair(groups, max) {
   const ordered = Object.fromEntries(Object.entries(bySection).map(([k, v]) => [k, roundRobin(v)]));
   const picked = [];
   for (const [sec, share] of Object.entries(SECTION_SHARE)) picked.push(...(ordered[sec] || []).splice(0, Math.round(max * share)));
-  // spare places go to whatever is left, still taking outlets in turn
-  const rest = roundRobin(Object.values(ordered).flat());
+  // spare places (when a section has fewer new stories than its share) go to the other sections in turn
+  const queues = Object.values(ordered).filter((q) => q.length);
+  const rest = [];
+  while (queues.some((q) => q.length)) for (const q of queues) if (q.length) rest.push(q.shift());
   return [...picked, ...rest].slice(0, max);
 }
 
@@ -772,7 +855,7 @@ export async function fillMissingImages(stories, apiKey) {
   // 1. a search query for each story
   for (const part of chunk(need, 60)) {
     try {
-      const input = await callClaude({
+      const input = await callDirect({
         model: MODEL, max_tokens: 4000,
         system: 'For each news headline, write a short search query that would find other outlets reporting the same event. Call record_queries once.',
         tools: [QUERY_TOOL], tool_choice: { type: 'tool', name: 'record_queries' },
@@ -808,7 +891,7 @@ export async function fillMissingImages(stories, apiKey) {
   for (const part of chunk(withCands, 15)) {
     let items = [];
     try {
-      const input = await callClaude({
+      const input = await callDirect({
         model: MODEL, max_tokens: 2000,
         system: 'You match news stories to articles from other outlets so the app can borrow a picture. For each story, pick the candidate that reports the SAME specific event. If none clearly does, answer -1: a wrong picture is worse than none. Call record_matches once.',
         tools: [MATCH_TOOL], tool_choice: { type: 'tool', name: 'record_matches' },
@@ -855,7 +938,7 @@ const SECTION_FOCUS = {
 };
 
 export async function makeSectionBriefs(stories, apiKey, now = new Date()) {
-  const since = new Date(now.getTime() - 18 * 3600e3).toISOString();
+  const since = new Date(now.getTime() - 26 * 3600e3).toISOString();
   const score = (s) => (s.sources?.length || 1) * 2 + (IMPACT_RANK[s.overall_impact] || 0) * 2 + (s.image ? 1 : 0);
   const out = {};
   await runParallel(Object.keys(SECTION_FOCUS), PARALLEL, async (sec) => {
@@ -895,7 +978,14 @@ export async function main() {
   }
   const feeds = await readJSON(FEEDS_FILE, []);
   const news = await readJSON(NEWS_FILE, { updated: null, stories: [] });
-  const seen = await readJSON(SEEN_FILE, []);
+  let seen = await readJSON(SEEN_FILE, []);
+  // Once: give fashion articles skipped by older versions a second chance.
+  if (!news.fashion_reset) {
+    const before = seen.length;
+    seen = seen.filter((l) => !/wwd\.com|vogue\.|businessoffashion|harpersbazaar|fashionista|highsnobiety|hypebeast|telegraph\.co\.uk\/fashion|theguardian\.com\/fashion/i.test(l));
+    news.fashion_reset = 1;
+    log(`Fashion articles given a second look: ${before - seen.length}.`);
+  }
   const briefing = await readJSON(BRIEFING_FILE, { editions: [] });
 
   // Stocks you added in the app arrive with the refresh (as a list of tickers).
@@ -905,7 +995,7 @@ export async function main() {
     await writeJSON(WATCH_FILE, watchlist);
     log(`Watchlist: ${watchlist.join(', ') || '(empty)'}`);
   }
-  const ai = (body) => callClaude({ model: MODEL, ...body }, apiKey);
+  const ai = (body) => callDirect({ model: MODEL, ...body }, apiKey); // stock summaries: small, sent straight away
   const doStocks = async (summariseMode) => {
     try {
       const prev = await readJSON(STOCKS_FILE, null);
@@ -974,10 +1064,15 @@ export async function main() {
 
   const cutoff = new Date(Date.now() - KEEP_DAYS * 86400e3).toISOString();
   for (const s of news.stories) s.sources = (s.sources || []).filter((x) => !BLOCKED.test(x.name) && !BLOCKED.test(x.link));
-  news.stories = news.stories
+  const recent = news.stories
     .filter((s) => s.sources.length && s.last_updated >= cutoff)
-    .sort((a, b) => b.last_updated.localeCompare(a.last_updated))
-    .slice(0, MAX_STORIES);
+    .sort((a, b) => b.last_updated.localeCompare(a.last_updated));
+  // Each section keeps its newest stories, so busy sections can't push quieter ones (like Fashion) out.
+  const keep = new Set();
+  const perSection = {};
+  for (const s of recent) { const k = normSection(s.section); if ((perSection[k] = (perSection[k] || 0) + 1) <= SECTION_MIN) keep.add(s); }
+  for (const s of recent) { if (keep.size >= MAX_STORIES) break; keep.add(s); }
+  news.stories = recent.filter((s) => keep.has(s));
   for (const s of news.stories) {
     if (!s.headline) s.headline = s.sources?.[0]?.title || s.claim;
     s.section = normSection(s.section);
@@ -1022,6 +1117,7 @@ export async function main() {
   await writeJSON(NEWS_FILE, news);
   await writeJSON(BRIEFING_FILE, briefing);
   await writeJSON(SEEN_FILE, [...done, ...seen].slice(0, MAX_SEEN));
+  if (USE_BATCH) log(`AI requests at half price: ${batchStats.done}; sent normally: ${batchStats.fallback}.`);
   log(`Done: ${stats.added} new stories, ${stats.merged} merged into existing, ${stats.dropped} skipped as irrelevant. ${news.stories.length} stories total.`);
 }
 
