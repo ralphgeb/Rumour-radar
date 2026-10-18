@@ -13,7 +13,7 @@
     ['World', ['World politics', 'Conflict & security', 'Elections', 'Trade & tariffs', 'Policy & Regulation', 'Climate']]
   ];
   const TOPICS = TOPIC_GROUPS.flatMap(([, list]) => list);
-  const SECTIONS = [['all', 'All'], ['foryou', 'For You'], ['Tech', 'Tech'], ['Finance', 'Finance'], ['World', 'World'], ['Fashion', 'Fashion'], ['rumours', 'Rumours']];
+  const SECTIONS = [['all', 'All'], ['Tech', 'Tech'], ['Finance', 'Finance'], ['World', 'World'], ['Fashion', 'Fashion']];
   // What can go on the Today page.
   const TODAY_OPTIONS = [
     ['Tech', 'Tech', 'Gadgets, AI, big tech and startups', '⚡︎'],
@@ -57,9 +57,7 @@
   function nextUpdateLabel() {
     const { h, m } = londonParts();
     const mins = h * 60 + m;
-    if (mins < 7 * 60 + 30) return 'at 7:30';
-    if (mins < 17 * 60) return 'at 17:00';
-    return 'tomorrow at 7:30';
+    return mins < 5 * 60 ? 'at 5:00' : 'tomorrow at 5:00';
   }
   const hash = (s) => [...String(s)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
   const initials = (name, ticker) => {
@@ -131,7 +129,7 @@
   const state = {
     tab: 'today',
     edition: 0,
-    section: store.get('rr.section', 'all'),
+    section: ['all', 'Tech', 'Finance', 'World', 'Fashion'].includes(store.get('rr.section', 'all')) ? store.get('rr.section', 'all') : 'all',
     newsLimit: PAGE_SIZE,
     rumourStatus: 'rumour',
     rumourSort: store.get('rr.rumourSort', 'latest')
@@ -291,7 +289,7 @@
       setBusy(false);
     }
   }
-  // Refresh never re-runs the news AI: news and Today come from the 7:30 and 17:00 updates.
+  // Refresh never re-runs the news AI: news and Today come from the 5:00 update.
   // It updates the Tube and weather straight away, and stock prices (plus AI summaries for newly added stocks).
   const refreshAll = () => {
     window.RR?.refreshWeather?.();
@@ -318,7 +316,7 @@
 
     if (!ed) {
       // No briefing written yet: show the biggest stories so far.
-      if (!stories.length) { $('#todayBody').innerHTML = empty('☀️', 'Your first briefing is on its way', `Briefings arrive at 7:30 and 17:00 London time. The next one is ${nextUpdateLabel()}.`); return; }
+      if (!stories.length) { $('#todayBody').innerHTML = empty('☀️', 'Your first briefing is on its way', `Your briefing arrives at 5:00 each morning, London time. The next one is ${nextUpdateLabel()}.`); return; }
       const top = stories.filter((s) => sectionOf(s) === 'Tech').sort((a, b) => storyScore(b) - storyScore(a)).slice(0, 6);
       $('#todayBody').innerHTML = `<p class="next" style="margin-top:0">Your first full tech briefing arrives ${esc(nextUpdateLabel())}. Here are the biggest tech stories so far.</p>
         ${top.map((s, i) => topCard(s, i + 1, headline(s), s.summary)).join('')}${customiseBtn}`;
@@ -423,7 +421,7 @@
     if (!b) {
       $('#todayBody').innerHTML = (pool.length
         ? `<p class="next" style="margin-top:0">Your first ${esc(name)} briefing arrives ${esc(nextUpdateLabel())}. Here are the biggest ${esc(name)} stories so far.</p>${pool.slice(0, 6).map((s, i) => topCard(s, i + 1, headline(s), s.summary)).join('')}`
-        : empty('☀️', `Your first ${name} briefing is on its way`, `Briefings arrive at 7:30 and 17:00 London time. The next one is ${nextUpdateLabel()}.`)) + todayFoot();
+        : empty('☀️', `Your first ${name} briefing is on its way`, `Your briefing arrives at 5:00 each morning, London time. The next one is ${nextUpdateLabel()}.`)) + todayFoot();
       return;
     }
     const top = byId.get(b.lead_story_id) || pool.find((s) => imageOf(s));
@@ -490,14 +488,25 @@
   }
 
   // ---------- NEWS ----------
+  // "All" is ranked by importance: how big the story is (the AI's 1-10 score and
+  // market impact), how widely it's covered (number of outlets), how recent it is,
+  // and a small boost for your interests. The topic tabs are newest first.
+  function rankScore(s) {
+    const imp = s.importance || (IMPACT[s.overall_impact] || 0) * 2 + 3;
+    const outlets = s.sources?.length || 1;
+    const hours = Math.max(0, (Date.now() - new Date(pubTime(s)).getTime()) / 3600e3);
+    const liked = (interests || []).length && (s.topics || []).some((t) => interests.includes(t)) ? 1.5 : 0;
+    const base = imp * 1.6 + Math.log2(outlets) * 3 + (IMPACT[s.overall_impact] || 0) + (s.status === 'rumour' ? 0.5 : 0) + liked;
+    return base * Math.pow(0.5, hours / 30); // loses half its weight every 30 hours
+  }
   function newsItems() {
     let list = stories.slice();
-    if (state.section === 'foryou') {
-      if (interests && interests.length) list = list.filter((s) => (s.topics || []).some((t) => interests.includes(t)));
-    } else if (state.section !== 'all') {
+    if (state.section !== 'all') {
       list = list.filter((s) => sectionOf(s) === state.section);
+      return list.sort((a, b) => pubTime(b).localeCompare(pubTime(a)));
     }
-    return list.sort((a, b) => pubTime(b).localeCompare(pubTime(a)));
+    const score = new Map(list.map((s) => [s, rankScore(s)]));
+    return list.sort((a, b) => score.get(b) - score.get(a));
   }
 
   function heroCard(s) {
@@ -537,7 +546,7 @@
         </div>
       </a>
       <div class="sec-body">
-        <p class="sec-sum">${esc(b.summary)}</p>
+        ${String(b.summary || '').split(/\n\s*\n/).filter((x) => x.trim()).map((x) => `<p class="sec-sum">${esc(x.trim())}</p>`).join('')}
         ${pts.length ? `<div class="sec-points">${pts.map((p) => `
           <a class="sec-point" href="#" ${p.s ? `data-story="${esc(p.s.id)}"` : ''}>
             <span class="b"></span><span class="t">${esc(p.text)}</span>${p.s ? chevron : ''}
@@ -556,6 +565,7 @@
   function renderNews() {
     $('#today').textContent = londonDay(new Date().toISOString());
     $('#updatedNews').textContent = updated ? `Updated ${ago(updated).toLowerCase()} · next ${nextUpdateLabel()}` : 'Waiting for the first update';
+    $('#sectionChips').classList.add('fixed');
     $('#sectionChips').innerHTML = SECTIONS.map(([k, l]) =>
       `<button class="chip ${state.section === k ? 'on' : ''}" data-section="${k}">${l}</button>`).join('');
     const isRumours = state.section === 'rumours';
@@ -566,7 +576,7 @@
     const all = newsItems();
     if (!stories.length) { $('#newsList').innerHTML = empty('📰', 'No stories yet', `The first update runs ${nextUpdateLabel()}, or tap refresh.`); return; }
     if (!all.length) {
-      $('#newsList').innerHTML = empty('🔍', 'Nothing here yet', state.section === 'foryou' ? 'Pick more interests in Settings → News interests, or try “All”.' : 'Try another section.');
+      $('#newsList').innerHTML = empty('🔍', 'Nothing here yet', state.section === 'foryou' ? 'Try another section.' : 'Try another section.');
       return;
     }
     const items = all.slice(0, state.newsLimit);
@@ -577,11 +587,11 @@
       html = sectionCover(state.section, brief);
       rest = items;
     } else {
-      const topIdx = Math.max(0, items.slice(0, 6).findIndex((s) => imageOf(s)));
+      const topIdx = Math.max(0, items.slice(0, state.section === 'all' ? 3 : 6).findIndex((s) => imageOf(s)));
       html = heroCard(items[topIdx]);
       rest = items.filter((_, i) => i !== topIdx);
     }
-    html += sectionHead('Latest', `${all.length} stories`);
+    html += sectionHead(state.section === 'all' ? 'Top stories' : 'Latest', `${all.length} stories`);
     for (let i = 0; i < rest.length; i += 8) {
       const chunk = rest.slice(i, i + 8);
       if (i > 0 && imageOf(chunk[0])) { html += heroCard(chunk.shift()); }
@@ -1131,7 +1141,7 @@
     const page = pushPage({ title: 'News interests', backLabel: 'Settings', html: `
       <div class="pref-page">
         <h1 class="pref-title">News interests</h1>
-        <p class="pref-sub">Tap the topics you like. Stories about them appear under <b>For You</b> in News.</p>
+        <p class="pref-sub">Tap the topics you like. Stories about them are ranked higher under <b>All</b> in News.</p>
         ${groupedChips()}
       </div>` });
     page.addEventListener('click', (e) => {
@@ -1150,7 +1160,7 @@
     const page = pushPage({ title: 'Today', backLabel: 'Settings', html: `
       <div class="pref-page">
         <h1 class="pref-title">On Today</h1>
-        <p class="pref-sub">Choose the topic of your morning and evening briefing. Tech comes with Rumour watch and Stocks to watch.</p>
+        <p class="pref-sub">Choose the topic of your morning briefing. Tech comes with Rumour watch and Stocks to watch.</p>
         <div class="group">${cells()}</div>
       </div>` });
     page.addEventListener('click', (e) => {

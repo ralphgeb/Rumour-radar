@@ -95,5 +95,19 @@
   {"name": "Fashionista", "section": "Fashion", "url": "https://fashionista.com/.rss/full/"},
   {"name": "Highsnobiety", "section": "Fashion", "url": "https://www.highsnobiety.com/feed/"},
   {"name": "Hypebeast", "section": "Fashion", "url": "https://hypebeast.com/feed"},
-  {"name": "Google News: fashion & luxury", "section": "Fashion", "url": "https://news.google.com/rss/search?q=(fashion+OR+luxury)+(LVMH+OR+Kering+OR+Herm%C3%A8s+OR+Chanel+OR+Prada+OR+Burberry+OR+Richemont+OR+Zara+OR+Inditex+OR+%22fashion+week%22)+when:2d&hl=en-GB&gl=GB&ceid=GB:en"}
+  {"name": "Google News: fashion & luxury", "section": "Fashion", "url": "https://news.google.com/rss/search?q=(fashion+OR+luxury)+(LVMH+OR+Kering+OR+Herm%C3%A8s+OR+Chanel+OR+Prada+OR+Burberry+OR+Richemont+OR+Zara+OR+Inditex+OR+%22fashion+week%22)+when:2d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Elle UK", "section": "Fashion", "url": "https://www.elle.com/uk/rss/all.xml/"},
+  {"name": "GQ", "section": "Fashion", "url": "https://www.gq.com/feed/rss"},
+  {"name": "Glamour UK", "section": "Fashion", "url": "https://www.glamourmagazine.co.uk/feed/rss"},
+  {"name": "Dazed", "section": "Fashion", "url": "https://www.dazeddigital.com/rss"},
+  {"name": "Footwear News", "section": "Fashion", "url": "https://footwearnews.com/feed/"},
+  {"name": "Fashion Network (via Google News)", "section": "Fashion", "url": "https://news.google.com/rss/search?q=site:fashionnetwork.com+when:3d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "FashionUnited (via Google News)", "section": "Fashion", "url": "https://news.google.com/rss/search?q=site:fashionunited.uk+OR+site:fashionunited.com+when:3d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Drapers (via Google News)", "section": "Fashion", "url": "https://news.google.com/rss/search?q=site:drapersonline.com+when:3d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "The Cut (via Google News)", "section": "Fashion", "url": "https://news.google.com/rss/search?q=site:thecut.com+fashion+when:3d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Google News: fashion", "section": "Fashion", "url": "https://news.google.com/rss/search?q=fashion+(collection+OR+designer+OR+%22creative+director%22+OR+runway+OR+brand)+when:3d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Google News: luxury business", "section": "Fashion", "url": "https://news.google.com/rss/search?q=luxury+(sales+OR+earnings+OR+brand+OR+acquisition)+(Gucci+OR+Dior+OR+Louis+Vuitton+OR+Prada+OR+Saint+Laurent+OR+Balenciaga+OR+Valentino+OR+Moncler)+when:3d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Google News: sneakers & streetwear", "section": "Fashion", "url": "https://news.google.com/rss/search?q=(sneaker+OR+streetwear)+(Nike+OR+Adidas+OR+New+Balance+OR+release+OR+collaboration)+when:3d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Google News: beauty industry", "section": "Fashion", "url": "https://news.google.com/rss/search?q=beauty+(L%27Or%C3%A9al+OR+Est%C3%A9e+Lauder+OR+Sephora+OR+launch+OR+brand)+when:3d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Google News: high street", "section": "Fashion", "url": "https://news.google.com/rss/search?q=(Zara+OR+H%26M+OR+Primark+OR+Next+OR+ASOS+OR+Shein+OR+Uniqlo)+fashion+when:3d&hl=en-GB&gl=GB&ceid=GB:en"}
 ]

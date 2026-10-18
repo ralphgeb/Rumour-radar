@@ -172,7 +172,7 @@
       $('#stkAsOf').textContent = 'Waiting for the first update';
       list.innerHTML = RR.empty('📈', 'Stock prices are on their way', RR.hasLiveKey()
         ? 'Tap refresh at the top to fetch them now (about a minute).'
-        : 'They arrive with the next update at 7:30 or 17:00. Turn on Live refresh in Settings to fetch them any time.');
+        : 'They arrive with the next update at 5:00. Turn on Live refresh in Settings to fetch them any time.');
       return;
     }
     const lead = quote(data.top[0]);
@@ -292,10 +292,10 @@
     if (s) {
       html += `<section class="card"><div class="card-title"><h2><span class="sparkle">✦</span> What’s happening</h2><span class="sent-pill ${s.sentiment}">${esc(s.sentiment)}</span></div>
         <p><b>${esc(s.headline)}</b></p><p>${esc(s.summary)}</p>
-        <p class="sd-note">AI summary · ${esc(timeLondon(s.generated))} · refreshed with your morning and evening briefings</p></section>`;
+        <p class="sd-note">AI summary · ${esc(timeLondon(s.generated))} · refreshed with your morning briefing</p></section>`;
     } else if (q && q.price != null) {
       html += `<section class="card"><div class="card-title"><h2><span class="sparkle">✦</span> What’s happening</h2></div>
-        <p class="sd-note" style="font-size:14px">The AI summary is on its way${RR.hasLiveKey() ? ' (about a minute after adding)' : ''}, and it’s refreshed with every morning and evening briefing.</p></section>`;
+        <p class="sd-note" style="font-size:14px">The AI summary is on its way${RR.hasLiveKey() ? ' (about a minute after adding)' : ''}, and it’s refreshed with every morning briefing.</p></section>`;
     }
     const heads = (data?.news?.[sym] || []).slice(0, 8);
     if (heads.length) {

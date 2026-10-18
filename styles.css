@@ -825,3 +825,7 @@ dialog.sheet[open] { animation: sheetUp .4s cubic-bezier(.2,.8,.2,1); }
 .tile:focus, .tile:focus-visible { outline: none; }
 .intro + .intro { margin-top: 12px; }
 .intro + .intro::first-letter { float: none; font-size: inherit; line-height: inherit; font-weight: inherit; padding: 0; color: inherit; }
+
+/* News tabs: All + 4 topics, fixed in one row */
+.chips.fixed { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; overflow: visible; padding: 6px 16px 12px; }
+.chips.fixed .chip { padding-left: 0; padding-right: 0; text-align: center; justify-content: center; min-width: 0; font-size: 14px; }
