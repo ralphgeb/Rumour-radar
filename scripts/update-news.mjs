@@ -958,6 +958,50 @@ async function microlinkImage(url) {
   } catch { return ''; }
 }
 
+// DuckDuckGo news (free) and, if you've added a BRAVE_API_KEY secret, Brave
+// news search: both list each article with the publisher's own thumbnail.
+async function newsSearchImages(need, apiKey) {
+  let ddg = 0; let brave = 0;
+  const items = need.map((s, i) => ({ id: String(i), title: s.sources?.[0]?.title || s.headline || '', link: (s.sources || []).map((x) => x.link).find((l) => l && !/news\.google\.com/.test(l)) || '' }));
+  const tmp = path.join(DATA_DIR, '..', '.img-in.json');
+  const out = path.join(DATA_DIR, '..', '.img-out.json');
+  try {
+    await fs.writeFile(tmp, JSON.stringify(items));
+    await new Promise((resolve) => execFile(process.env.PYTHON || 'python3', [path.join(ROOT, 'scripts', 'news_images.py'), tmp, out], { timeout: 8 * 60e3 }, (err, so, se) => {
+      if (so) process.stdout.write(so);
+      if (err) log(`DuckDuckGo picture search skipped: ${(se || err.message).split('\n').filter(Boolean).slice(-1)[0]}`);
+      resolve();
+    }));
+    const found = JSON.parse(await fs.readFile(out, 'utf8').catch(() => '{}'));
+    for (const [i, img] of Object.entries(found)) { const s = need[Number(i)]; if (s && img && !BAD_IMAGE.test(img)) { s.image = img; ddg++; } }
+  } catch (e) { log(`DuckDuckGo picture search failed: ${e.message}`); }
+  finally { fs.rm(tmp, { force: true }).catch(() => {}); fs.rm(out, { force: true }).catch(() => {}); }
+  picStats.duckduckgo = ddg;
+
+  const key = process.env.BRAVE_API_KEY;
+  if (key) {
+    for (const s of need.filter((x) => !x.image).slice(0, 80)) {
+      const title = s.sources?.[0]?.title || s.headline || '';
+      const link = (s.sources || []).map((x) => x.link).find((l) => l && !/news\.google\.com/.test(l)) || '';
+      try {
+        const res = await fetch(`https://api.search.brave.com/res/v1/news/search?q=${encodeURIComponent(title.slice(0, 150))}&count=10`, { headers: { Accept: 'application/json', 'X-Subscription-Token': key }, signal: AbortSignal.timeout(10000) });
+        noteStatus('https://brave.com', 'brave', res.status);
+        if (!res.ok) { if (res.status === 401 || res.status === 403 || res.status === 429) break; continue; }
+        const results = (await res.json()).results || [];
+        const k = (u) => { try { const x = new URL(u); return (x.hostname.replace(/^www\./, '') + x.pathname.replace(/\/$/, '')).toLowerCase(); } catch { return ''; } };
+        const hit = results.find((r) => link && k(r.url) === k(link) && (r.thumbnail?.original || r.thumbnail?.src))
+          || results.find((r) => sameHeadline(r.title, title) && (r.thumbnail?.original || r.thumbnail?.src));
+        const img = hit && (hit.thumbnail.original || hit.thumbnail.src);
+        if (img && !BAD_IMAGE.test(img)) { s.image = img; brave++; }
+      } catch { /* try the next one */ }
+      await new Promise((r) => setTimeout(r, 1100)); // 1 request a second
+    }
+  }
+  picStats.brave = brave;
+  log(`Pictures from news search: DuckDuckGo ${ddg}${key ? `, Brave ${brave}` : ''}.`);
+  return ddg + brave;
+}
+
 const QUERY_TOOL = {
   name: 'record_queries',
   description: 'Record a news search query for every headline.',
@@ -980,7 +1024,7 @@ export async function fillMissingImages(stories, apiKey) {
   // Pictures found by the old Wikipedia method are often off-topic: remove them.
   for (const s of stories) if (s.image_credit === 'Wikipedia') { s.image = ''; delete s.image_credit; s.pic_checked = 0; }
   // new ways of finding pictures: give every story another try
-  for (const s of stories) if ((s.pic_v || 0) < 2) { s.pic_v = 2; s.pic_checked = 0; }
+  for (const s of stories) if ((s.pic_v || 0) < 3) { s.pic_v = 3; s.pic_checked = 0; }
   let need = stories
     .filter((s) => !s.image && !(s.sources || []).some((x) => x.image) && (s.pic_checked || 0) < 3 && (s.last_updated || '') >= cutoff)
     .sort((a, b) => (b.last_updated || '').localeCompare(a.last_updated || ''))
@@ -1033,18 +1077,8 @@ export async function fillMissingImages(stories, apiKey) {
   need = need.filter((s) => !s.image);
   if (!need.length) return;
 
-  // 0b. the publisher's own thumbnail from Google News (for sites that block us)
-  let gn = 0;
-  for (const part of chunk(need, 4)) {
-    await Promise.all(part.map(async (s) => {
-      for (const t of [...new Set([s.sources?.[0]?.title, s.headline].filter(Boolean))]) {
-        const img = await googleNewsThumb(t);
-        if (img) { s.image = img; gn++; return; }
-      }
-    }));
-  }
-  picStats.googleNews = gn;
-  log(`Pictures from Google News thumbnails: ${gn} of ${need.length}.`);
+  // 0d. news search engines: the publisher's own thumbnail for sites that block us (WSJ, Reuters…)
+  const searchHits = await newsSearchImages(need, apiKey);
   need = need.filter((s) => !s.image);
   if (!need.length) return;
 
