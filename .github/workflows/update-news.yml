@@ -3,7 +3,8 @@ name: Update news
 on:
   schedule:
     # Checks every 30 minutes whether anything is due (London time):
-    #   - the news and Today briefing from 7:30 and from 17:00
+    #   - the news and Today briefing once a day from 5:00 (at half price
+    #     through the AI batch queue, which can take a while, so it is ready early)
     #   - stock prices about once an hour on weekdays
     # GitHub often starts scheduled runs late or skips some, so the updater
     # catches up on anything missed instead of relying on exact times.
@@ -57,7 +58,7 @@ jobs:
     needs: check
     if: needs.check.outputs.go == 'true'
     runs-on: ubuntu-latest
-    timeout-minutes: 40
+    timeout-minutes: 150
     # Only one update at a time; a waiting one is never cancelled by a check.
     concurrency:
       group: update-news
@@ -65,26 +66,38 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # If this run waited behind another update, check it's still needed.
+      - name: Still due?
+        id: again
+        run: |
+          if [ "${{ github.event_name }}" = "schedule" ]; then node scripts/due.mjs; else echo "go=true" >> "$GITHUB_OUTPUT"; fi
+
       - uses: actions/setup-node@v5
+        if: steps.again.outputs.go == 'true'
         with:
           node-version: 22
 
       - uses: actions/setup-python@v5
+        if: steps.again.outputs.go == 'true'
         with:
           python-version: "3.12"
 
       - name: Install the stock price tool
+        if: steps.again.outputs.go == 'true'
         run: pip install --quiet --upgrade yfinance financedatabase
 
       - name: Collect and analyse news
+        if: steps.again.outputs.go == 'true'
         run: node scripts/update-news.mjs
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           MAKE_BRIEFING: ${{ github.event.inputs.briefing || 'auto' }}
           MODE: ${{ needs.check.outputs.mode }}
           WATCHLIST: ${{ github.event.inputs.watchlist || '' }}
+          AI_BATCH: ${{ github.event_name == 'schedule' }}
 
       - name: Save results
+        if: steps.again.outputs.go == 'true'
         run: |
           git config user.name "rumour-radar-bot"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
