@@ -223,7 +223,6 @@ const ANALYSIS_TOOL = {
             topics: { type: 'array', items: { type: 'string', enum: TOPICS } },
             overall_impact: { type: 'string', enum: ['none', 'low', 'medium', 'high'], description: 'Likely market impact (if a rumour: if it turns out true).' },
             market_take: { type: 'string', description: 'One short sentence on how this could affect investors or the stocks below. Empty string if there is no market angle.' },
-            image_subject: { type: 'string', description: 'Exact title of the English Wikipedia article whose picture best illustrates this story: the main company, person, product, institution or place (e.g. "Nvidia", "Bank of England", "Federal Reserve", "Strait of Hormuz", "iPhone"). Empty string if nothing fits.' },
             stocks: {
               type: 'array',
               description: 'Up to 5 publicly traded companies most likely to be affected by this news (or by the rumour if true): the company itself, rivals, suppliers or partners. For world, political or economic news you may instead list the most affected index, currency or commodity using Yahoo Finance symbols (e.g. ^FTSE, ^GSPC, GBPUSD=X, CL=F for oil, GC=F for gold). Use real primary listing tickers (e.g. AAPL, 005930.KS, BARC.L). Empty if none.',
@@ -240,7 +239,7 @@ const ANALYSIS_TOOL = {
               }
             }
           },
-          required: ['article_index', 'keep', 'same_story_as', 'status', 'claim', 'summary', 'key_points', 'likelihood', 'likelihood_reason', 'signals', 'topics', 'overall_impact', 'market_take', 'image_subject', 'stocks']
+          required: ['article_index', 'keep', 'same_story_as', 'status', 'claim', 'summary', 'key_points', 'likelihood', 'likelihood_reason', 'signals', 'topics', 'overall_impact', 'market_take', 'stocks']
         }
       }
     },
@@ -443,7 +442,6 @@ export function sanitise(an) {
     topics: topics.length ? topics : ['Other'],
     overall_impact: IMPACT_RANK[an.overall_impact] !== undefined ? an.overall_impact : 'low',
     market_take: trim(an.market_take, 240),
-    image_subject: trim(an.image_subject, 100),
     stocks
   };
 }
@@ -661,7 +659,6 @@ export async function upgradeOld(stories, apiKey) {
         if (!s.market_take && c.market_take) s.market_take = c.market_take;
         if (!(s.stocks || []).length && c.stocks.length) s.stocks = c.stocks;
         if (!s.image && a.image) s.image = a.image;
-        if (!s.image_subject && c.image_subject) s.image_subject = c.image_subject;
         done++;
       }
     } catch (e) {
@@ -695,108 +692,143 @@ export function pickFair(groups, max) {
   return [...picked, ...rest].slice(0, max);
 }
 
-// ---------- Pictures from Wikipedia when a site doesn't give one ----------
+// ---------- Pictures from other outlets covering the same story ----------
 // Many sites (Bloomberg, FT, WSJ, Reuters via Google News…) don't share a
-// picture. For those we find a freely licensed one on Wikipedia: first from
-// the exact subjects the AI suggests (company, person, place…), then by
-// searching Wikipedia, and finally from a broader topic picture.
-const WIKI_HEADERS = { 'User-Agent': 'RumourRadar/1.1 (personal news app)', Accept: 'application/json' };
-const bigThumb = (u) => (u || '').replace(/\/(\d+)px-/, '/800px-');
-const isLogo = (u) => /\.svg|logo|icon|flag_of|coat_of_arms|wordmark/i.test(u || '');
+// picture. For those we look for the SAME story at other news outlets (via
+// Bing News and the free GDELT news index) and use that article's picture,
+// credited to the outlet. An AI check makes sure the other article is about
+// the same specific event; if nothing matches, the story keeps its coloured
+// box with the outlet's name rather than showing a wrong picture.
+const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; RumourRadar/1.2; personal news reader)' };
+const BAD_IMAGE = /logo|placeholder|default[-_.]|fallback|sprite|icon|avatar|blank|1x1|pixel|og-default|share-default|social-default/i;
+const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
 
-async function wikiImage(title) {
-  if (!title) return '';
+async function getText(url, ms = 9000) {
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), ms);
   try {
-    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}?redirect=true`, { headers: WIKI_HEADERS });
-    if (!res.ok) return '';
-    const j = await res.json();
-    if (j.type === 'disambiguation') return '';
-    const thumb = j.thumbnail?.source || '';
-    if (thumb && !isLogo(thumb)) return bigThumb(thumb);
-    const orig = j.originalimage?.source || '';
-    return /\.(jpe?g|png|webp)$/i.test(orig) && !isLogo(orig) ? orig : '';
-  } catch { return ''; }
+    const res = await fetch(url, { signal: ctrl.signal, headers: UA });
+    return res.ok ? await res.text() : '';
+  } catch { return ''; } finally { clearTimeout(t); }
 }
-
-// Wikipedia search: the best-matching articles that have a (non-logo) picture.
-async function wikiSearchImage(query) {
-  if (!query) return '';
-  try {
-    const u = 'https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*'
-      + `&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=6&gsrnamespace=0`
-      + '&prop=pageimages&piprop=thumbnail&pithumbsize=800&pilicense=free';
-    const res = await fetch(u, { headers: WIKI_HEADERS });
-    if (!res.ok) return '';
-    const pages = ((await res.json()).query?.pages || []).sort((a, b) => (a.index || 0) - (b.index || 0));
-    const hit = pages.find((p) => p.thumbnail?.source && !isLogo(p.thumbnail.source));
-    return hit ? hit.thumbnail.source : '';
-  } catch { return ''; }
-}
-
-// A sensible picture for the story's broad topic when nothing specific is found.
-const TOPIC_PICTURES = {
-  'Markets & Economy': 'Wall Street', 'Banks & Finance': 'Bank of England', 'Central banks': 'Federal Reserve Building',
-  'Deals & Mergers': 'Wall Street', 'Crypto': 'Bitcoin', 'Commodities': 'Oil platform', 'Energy': 'Oil refinery',
-  'UK business': 'City of London', 'Trade & tariffs': 'Container ship', 'World politics': 'United Nations Headquarters',
-  'Conflict & security': 'United Nations Security Council', 'Elections': 'Ballot box', 'Climate': 'Wind farm',
-  'AI': 'Artificial intelligence', 'Chips': 'Integrated circuit', 'Phones & Gadgets': 'Smartphone', 'Computers': 'Laptop',
-  'Gaming': 'Video game console', 'Space': 'Rocket launch', 'Cars': 'Automobile', 'Tesla & EVs': 'Electric car',
-  'Fashion & Luxury': 'Fashion week', 'Designers & Shows': 'Runway (fashion)', 'Beauty': 'Cosmetics', 'Retail': 'Shopping mall'
+const xmlText = (block, tag) => {
+  const m = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`, 'i'));
+  return m ? decodeXml(m[1].replace(/^<!\[CDATA\[|\]\]>$/g, '')).trim() : '';
 };
-const SECTION_PICTURES = { Finance: 'London Stock Exchange', World: 'Globe', Tech: 'Data center', Fashion: 'Fashion week' };
+const decodeXml = (t) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&');
 
-const SUBJECT_TOOL = {
-  name: 'record_subjects',
-  description: 'Record picture ideas for every headline.',
+// Bing News search (RSS): other outlets' articles with their thumbnails.
+async function bingNews(query) {
+  const xml = await getText(`https://www.bing.com/news/search?q=${encodeURIComponent(query)}&format=rss&setlang=en-GB`);
+  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/gi)].slice(0, 10).map(([, it]) => {
+    let link = xmlText(it, 'link');
+    const real = link.match(/[?&]url=([^&]+)/i);
+    if (real) { try { link = decodeURIComponent(real[1]); } catch { /* keep */ } }
+    let img = xmlText(it, 'News:Image');
+    return { title: xmlText(it, 'title'), outlet: xmlText(it, 'News:Source') || hostOf(link), link, image: img };
+  }).filter((c) => c.title && c.link);
+}
+
+// GDELT: a free index of world news, with each article's share picture.
+let lastGdelt = 0;
+async function gdelt(query) {
+  const wait = lastGdelt + 5500 - Date.now();   // GDELT allows about one request every 5 seconds
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastGdelt = Date.now();
+  const txt = await getText(`https://api.gdeltproject.org/api/v2/doc/doc?query=${encodeURIComponent(query + ' sourcelang:english')}&mode=artlist&format=json&maxrecords=12&timespan=3d&sort=hybridrel`, 12000);
+  try {
+    return (JSON.parse(txt).articles || []).map((a) => ({ title: a.title || '', outlet: a.domain || hostOf(a.url), link: a.url, image: a.socialimage || '' })).filter((c) => c.title && c.link);
+  } catch { return []; }
+}
+
+const QUERY_TOOL = {
+  name: 'record_queries',
+  description: 'Record a news search query for every headline.',
   input_schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: {
     i: { type: 'integer' },
-    subjects: { type: 'array', items: { type: 'string' }, description: 'Up to 3 exact English Wikipedia article titles whose lead picture would illustrate the story, most specific first: the main company, person, product, building, institution or place (e.g. "Nvidia", "Rachel Reeves", "Bank of England", "Strait of Hormuz", "Chanel"). Prefer people, places and buildings over abstract topics.' },
-    search: { type: 'string', description: '2-4 word Wikipedia search query for a photo that fits the story, e.g. "Paris Fashion Week", "Tokyo Stock Exchange".' }
-  }, required: ['i', 'subjects', 'search'] } } }, required: ['items'] }
+    query: { type: 'string', description: '3-7 words that would find other news articles about this exact event (names, product, company, key fact). No quotes or operators.' }
+  }, required: ['i', 'query'] } } }, required: ['items'] }
+};
+const MATCH_TOOL = {
+  name: 'record_matches',
+  description: 'Record, for every story, which candidate article reports the same specific event.',
+  input_schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: {
+    i: { type: 'integer', description: 'Story number.' },
+    match: { type: 'integer', description: 'Number of the candidate that reports the SAME specific event (same announcement, product, deal, result or incident), or -1 if none does. Same company or topic is NOT enough. When unsure, -1.' }
+  }, required: ['i', 'match'] } } }, required: ['items'] }
 };
 
 export async function fillMissingImages(stories, apiKey) {
   const cutoff = new Date(Date.now() - 72 * 3600e3).toISOString();
-  // wiki_checked: 2 = checked with the newer, more thorough search
-  const need = stories.filter((s) => !s.image && !(s.sources || []).some((x) => x.image) && (s.wiki_checked || 0) < 2 && (s.last_updated || '') >= cutoff).slice(0, 200);
+  // Pictures found by the old Wikipedia method are often off-topic: remove them.
+  for (const s of stories) if (s.image_credit === 'Wikipedia') { s.image = ''; delete s.image_credit; s.pic_checked = 0; }
+  const need = stories
+    .filter((s) => !s.image && !(s.sources || []).some((x) => x.image) && (s.pic_checked || 0) < 3 && (s.last_updated || '') >= cutoff)
+    .sort((a, b) => (b.last_updated || '').localeCompare(a.last_updated || ''))
+    .slice(0, 120);
   if (!need.length) return;
+  const started = Date.now();
+
+  // 1. a search query for each story
   for (const part of chunk(need, 60)) {
     try {
       const input = await callClaude({
-        model: MODEL, max_tokens: 6000,
-        system: 'You pick illustrations for news headlines from Wikipedia. For each headline give up to 3 exact English Wikipedia article titles whose lead picture would illustrate it, plus a short search query. Call record_subjects once.',
-        tools: [SUBJECT_TOOL], tool_choice: { type: 'tool', name: 'record_subjects' },
+        model: MODEL, max_tokens: 4000,
+        system: 'For each news headline, write a short search query that would find other outlets reporting the same event. Call record_queries once.',
+        tools: [QUERY_TOOL], tool_choice: { type: 'tool', name: 'record_queries' },
         messages: [{ role: 'user', content: part.map((s, i) => `[${i}] ${s.headline || s.claim}`).join('\n') }]
       }, apiKey);
-      for (const it of input.items || []) {
-        const s = part[it.i]; if (!s) continue;
-        s._subjects = (it.subjects || []).map((x) => trim(x, 100)).filter(Boolean).slice(0, 3);
-        s._search = trim(it.search || '', 80);
-      }
-    } catch (e) { if (e.fatal) throw e; log(`Picture ideas skipped: ${e.message}`); }
+      for (const it of input.items || []) if (part[it.i]) part[it.i]._q = trim(it.query || '', 100);
+    } catch (e) { if (e.fatal) throw e; log(`Picture search queries skipped: ${e.message}`); }
   }
-  const cache = new Map();
-  const cached = (key, fn) => { if (!cache.has(key)) cache.set(key, fn()); return cache.get(key); };
-  let found = 0;
-  let generic = 0;
+
+  // 2. candidate articles from other outlets (Bing first, then GDELT for the rest while time allows)
+  const ownHosts = (s) => new Set((s.sources || []).map((x) => hostOf(x.link)));
+  const usable = (s, list) => {
+    const own = ownHosts(s);
+    const seen = new Set();
+    return list.filter((c) => c.image && !BAD_IMAGE.test(c.image) && /^https:\/\//.test(c.image) && !own.has(hostOf(c.link)) && !/news\.google\.com/.test(c.link))
+      .filter((c) => { const k = c.title.toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; })
+      .slice(0, 8);
+  };
   for (const part of chunk(need, 6)) {
     await Promise.all(part.map(async (s) => {
-      const subjects = [...new Set([...(s._subjects || []), s.image_subject].filter(Boolean))];
-      let img = '';
-      for (const t of subjects) { img = await cached('t:' + t, () => wikiImage(t)); if (img) break; }
-      if (!img) for (const q of [s._search, ...subjects].filter(Boolean)) { img = await cached('q:' + q, () => wikiSearchImage(q)); if (img) break; }
-      if (!img) {
-        const topic = (s.topics || []).find((t) => TOPIC_PICTURES[t]);
-        const fallback = TOPIC_PICTURES[topic] || SECTION_PICTURES[normSection(s.section)];
-        img = await cached('t:' + fallback, () => wikiImage(fallback));
-        if (img) generic++;
-      }
-      if (img) { s.image = img; s.image_credit = 'Wikipedia'; found++; }
-      s.wiki_checked = 2;
-      delete s._subjects; delete s._search;
+      const q = s._q || (s.headline || s.claim || '').slice(0, 90);
+      s._cands = usable(s, await bingNews(q));
     }));
   }
-  log(`Wikipedia pictures: added ${found} of ${need.length} stories that had none (${generic} by topic).`);
+  for (const s of need) {
+    if (s._cands.length >= 2 || Date.now() - started > 6 * 60e3) continue;
+    s._cands = usable(s, [...s._cands, ...await gdelt(s._q || (s.headline || '').slice(0, 80))]);
+  }
+
+  // 3. an AI check that the other article really is the same story
+  const withCands = need.filter((s) => s._cands.length);
+  let found = 0;
+  for (const part of chunk(withCands, 15)) {
+    let items = [];
+    try {
+      const input = await callClaude({
+        model: MODEL, max_tokens: 2000,
+        system: 'You match news stories to articles from other outlets so the app can borrow a picture. For each story, pick the candidate that reports the SAME specific event. If none clearly does, answer -1: a wrong picture is worse than none. Call record_matches once.',
+        tools: [MATCH_TOOL], tool_choice: { type: 'tool', name: 'record_matches' },
+        messages: [{ role: 'user', content: part.map((s, i) => `Story [${i}]: ${s.headline || s.claim}\n   ${trim(s.summary || '', 220)}\n${s._cands.map((c, j) => `   (${j}) ${c.outlet}: ${c.title}`).join('\n')}`).join('\n\n') }]
+      }, apiKey);
+      items = input.items || [];
+    } catch (e) { if (e.fatal) throw e; log(`Picture check skipped: ${e.message}`); continue; }
+    await Promise.all(items.map(async (it) => {
+      const s = part[it.i];
+      const c = s?._cands?.[it.match];
+      if (!c) return;
+      // prefer the article's own full-size picture; fall back to the search thumbnail
+      let img = '';
+      if (!/bing\.com\/th\?/.test(c.image)) img = c.image;
+      else { const a = await fetchArticle(c.link); img = a.image && !BAD_IMAGE.test(a.image) ? a.image : c.image; }
+      if (img) { s.image = img; s.image_credit = c.outlet; s.image_link = c.link; found++; }
+    }));
+  }
+  for (const s of need) { s.pic_checked = (s.pic_checked || 0) + 1; delete s._q; delete s._cands; }
+  log(`Pictures from other outlets: found ${found} of ${need.length} stories that had none (${withCands.length} had candidates).`);
 }
 
 // ---------- "Today in Tech / Finance / World" covers ----------
