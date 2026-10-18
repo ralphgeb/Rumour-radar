@@ -105,12 +105,19 @@ export function parseFeed(xml) {
 // Reads the start of an article page and returns its preview image (og:image / twitter:image).
 export function findMetaImage(html, pageUrl) {
   const metas = [...html.matchAll(/<meta\b[^>]*>/gi)].map((m) => m[0]);
-  for (const key of ['og:image:secure_url', 'og:image', 'twitter:image', 'twitter:image:src']) {
-    const tagText = metas.find((t) => new RegExp(`(property|name)\\s*=\\s*["']${key.replace(/:/g, '\\:')}["']`, 'i').test(t));
+  const abs = (u) => { try { return new URL(u, pageUrl).toString().replace(/^http:\/\//i, 'https://'); } catch { return ''; } };
+  for (const key of ['og:image:secure_url', 'og:image', 'og:image:url', 'twitter:image', 'twitter:image:src', 'image', 'thumbnail', 'sailthru.image.full', 'parsely-image-url']) {
+    const tagText = metas.find((t) => new RegExp(`(property|name|itemprop)\\s*=\\s*["']${key.replace(/[:.]/g, '\\$&')}["']`, 'i').test(t));
     const content = tagText && attr(tagText, 'content');
-    if (content) {
-      try { return new URL(content, pageUrl).toString().replace(/^http:\/\//i, 'https://'); } catch { /* ignore */ }
-    }
+    if (content && abs(content)) return abs(content);
+  }
+  // <link rel="image_src" href="..">
+  const link = html.match(/<link\b[^>]*rel\s*=\s*["']image_src["'][^>]*>/i);
+  if (link && attr(link[0], 'href')) return abs(attr(link[0], 'href'));
+  // JSON-LD: "image": "..." or {"url": ".."} or [".."]
+  for (const m of html.matchAll(/<script[^>]+application\/ld\+json[^>]*>([\s\S]*?)<\/script>/gi)) {
+    const im = m[1].match(/"(?:image|thumbnailUrl)"\s*:\s*(?:\[\s*)?(?:\{[^}]*?"url"\s*:\s*)?"(https?:[^"]+)"/i);
+    if (im) return abs(im[1].replace(/\\\//g, '/'));
   }
   return '';
 }

@@ -167,17 +167,65 @@ export function extractText(html) {
   return [...new Set(paras)].join('\n').slice(0, ARTICLE_CHARS);
 }
 
+// Many sites refuse anything that doesn't look like a normal browser.
+const BROWSER = {
+  'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36',
+  'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8',
+  'Accept-Language': 'en-GB,en;q=0.9'
+};
+
+// ---------- Google News links → the real article ----------
+// Stories found through Google News come with a news.google.com link that
+// hides the publisher's address, so we couldn't read the article or its
+// picture. This asks Google News for the real address (the same request its
+// own web page makes). If Google ever changes this, we simply keep the old link.
+const gnCache = new Map();
+let gnFailures = 0;
+export async function realLink(url) {
+  if (!/news\.google\.com\/(rss\/)?articles\//.test(url || '')) return url;
+  if (gnCache.has(url)) return gnCache.get(url);
+  if (gnFailures >= 6) return url; // Google is refusing for now: stop trying this run
+  const id = url.split('/articles/')[1].split(/[?#]/)[0];
+  let out = url;
+  try {
+    // older links have the address inside them
+    const raw = Buffer.from(id.replace(/-/g, '+').replace(/_/g, '/'), 'base64').toString('latin1');
+    const direct = raw.match(/https?:\/\/[\x21-\x7e]+/);
+    if (direct && !raw.includes('AU_yqL')) out = direct[0];
+    else {
+      const page = await fetch(`https://news.google.com/rss/articles/${id}`, { headers: BROWSER, signal: AbortSignal.timeout(10000) }).then((r) => r.text());
+      const sg = page.match(/data-n-a-sg="([^"]+)"/)?.[1];
+      const ts = page.match(/data-n-a-ts="([^"]+)"/)?.[1];
+      if (!sg || !ts) throw new Error('no signature');
+      const req = [[['Fbv4je', JSON.stringify(['garturlreq', [['X', 'X', ['X', 'X'], null, null, 1, 1, 'US:en', null, 1, null, null, null, null, null, 0, 1], 'X', 'X', 1, [1, 1, 1], 1, 1, null, 0, 0, null, 0], id, Number(ts), sg]), null, 'generic']]];
+      const res = await fetch('https://news.google.com/_/DotsSplashUi/data/batchexecute', {
+        method: 'POST',
+        headers: { ...BROWSER, 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8' },
+        body: 'f.req=' + encodeURIComponent(JSON.stringify(req)),
+        signal: AbortSignal.timeout(10000)
+      }).then((r) => r.text());
+      const part = JSON.parse(res.split('\n\n')[1]);
+      const found = JSON.parse(part[0][2])[1];
+      if (/^https?:\/\//.test(found)) out = found; else throw new Error('no address');
+    }
+    gnFailures = 0;
+  } catch { gnFailures++; }
+  gnCache.set(url, out);
+  return out;
+}
+
 async function fetchArticle(url) {
-  if (!/^https?:\/\//.test(url) || /news\.google\.com/.test(url)) return { text: '', image: '' };
+  url = await realLink(url);
+  if (!/^https?:\/\//.test(url) || /news\.google\.com/.test(url)) return { text: '', image: '', url };
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 10000);
   try {
     const res = await fetch(url, {
       signal: ctrl.signal,
       redirect: 'follow',
-      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; RumourRadar/1.0; personal news reader)', Accept: 'text/html' }
+      headers: BROWSER
     });
-    if (!res.ok || !res.body) return { text: '', image: '' };
+    if (!res.ok || !res.body) return { text: '', image: '', url };
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let html = '';
@@ -187,16 +235,17 @@ async function fetchArticle(url) {
       html += decoder.decode(value, { stream: true });
     }
     reader.cancel().catch(() => {});
-    return { text: extractText(html), image: findMetaImage(html, res.url || url) };
-  } catch { return { text: '', image: '' }; } finally { clearTimeout(t); }
+    return { text: extractText(html), image: findMetaImage(html, res.url || url), url };
+  } catch { return { text: '', image: '', url }; } finally { clearTimeout(t); }
 }
 
 export async function readArticles(articles) {
   if (!articles.length) return;
   let withText = 0;
-  for (let i = 0; i < articles.length; i += 12) {
-    await Promise.all(articles.slice(i, i + 12).map(async (a) => {
-      const { text, image } = await fetchArticle(a.link);
+  for (let i = 0; i < articles.length; i += 8) {
+    await Promise.all(articles.slice(i, i + 8).map(async (a) => {
+      const { text, image, url } = await fetchArticle(a.link);
+      if (url && url !== a.link && !/news\.google\.com/.test(url)) a.link = url; // keep the publisher's own address
       a.text = text;
       if (!a.image && image) a.image = image;
       if (text) withText++;
@@ -218,7 +267,7 @@ const ANALYSIS_TOOL = {
           type: 'object',
           properties: {
             article_index: { type: 'integer' },
-            keep: { type: 'boolean', description: 'true for real news: tech, AI, gadgets, science, companies, finance, markets, economics, significant world/political news, and fashion news (collections, shows, designers, brands, luxury and beauty business). false for sport, celebrity gossip, recipes, horoscopes, shopping deals/coupons and "best buys" edits, podcasts/newsletters with no news, and puzzles.' },
+            keep: { type: 'boolean', description: 'true for real news: tech, AI, gadgets, science, companies, finance, markets, economics, significant world/political news, and luxury/high-fashion news (luxury houses and groups, major designers and creative directors, the big fashion weeks, global fashion business). false for local or regional fashion weeks, single store openings, local designers, mass-market retail, sport, celebrity gossip, recipes, horoscopes, shopping deals/coupons and "best buys" edits, podcasts/newsletters with no news, and puzzles.' },
             same_story_as: { type: ['string', 'null'], description: 'If this article covers the SAME specific claim/event as an existing story, that story id (e.g. "a1b2c3d4e5"), or "article:N" for an earlier article in this batch. Otherwise null.' },
             status: { type: 'string', enum: ['rumour', 'confirmed', 'denied', 'news'], description: 'rumour = unconfirmed claim (leaks, "reportedly", "sources say", analyst predictions of company plans, "in talks"), including unconfirmed political or world developments that could move markets (e.g. possible tariffs, sanctions, rate decisions, ceasefires, government interventions). confirmed = an official announcement that confirms a previously rumoured claim. denied = officially denied. news = ordinary confirmed news.' },
             claim: { type: 'string', description: 'One short, neutral sentence in your own words stating the core news or claim. Max 140 chars.' },
@@ -255,7 +304,7 @@ const ANALYSIS_TOOL = {
   }
 };
 
-const SYSTEM = `You are the analysis engine of a news app with four sections: Tech (tech, AI, gadgets, companies, VC), Finance (markets, companies, economy), World (major world and political news) and Fashion (fashion, luxury, beauty, designers, shows and the business of fashion). For every article you read the text given and write a neutral summary and key points in your own words, decide whether it is confirmed news or an unconfirmed RUMOUR, estimate how likely rumours are to be true, and list the stocks the story could move.
+const SYSTEM = `You are the analysis engine of a news app with four sections: Tech (tech, AI, gadgets, companies, VC), Finance (markets, companies, economy), World (major world and political news) and Fashion (luxury and high fashion: luxury houses, major designers, the big fashion weeks and the business of luxury). For every article you read the text given and write a neutral summary and key points in your own words, decide whether it is confirmed news or an unconfirmed RUMOUR, estimate how likely rumours are to be true, and list the stocks the story could move.
 
 Writing: clear, neutral, British English, no hype. Everything must be in your own words; never copy sentences from the articles and never invent facts, figures or quotes.
 
@@ -416,7 +465,7 @@ const TRIAGE_TOOL = {
           type: 'object',
           properties: {
             i: { type: 'integer', description: 'Headline number.' },
-            keep: { type: 'boolean', description: 'false for sport, celebrity gossip, recipes, horoscopes, shopping deals and "best buys" lists, puzzles, podcasts/newsletters with no news, and trivial items. true for real tech, business, finance, economic, political and world news. For Fashion headlines, keep real fashion news: collections, shows, designers and creative directors, brands, luxury and retail business, trends and beauty industry news; drop pure shopping edits, horoscopes and celebrity gossip.' },
+            keep: { type: 'boolean', description: 'false for sport, celebrity gossip, recipes, horoscopes, shopping deals and "best buys" lists, puzzles, podcasts/newsletters with no news, and trivial items. true for real tech, business, finance, economic, political and world news. Fashion is a LUXURY and high-fashion section: keep news about luxury houses and groups (LVMH, Kering, Hermès, Chanel, Prada, Richemont…), major designers and creative directors, the big four fashion weeks (Paris, Milan, London, New York) and couture, and major global fashion business. Drop local or regional fashion weeks, store openings in individual cities, local designers, regional or mass-market retail news, beauty contests, shopping edits, horoscopes and celebrity gossip.' },
             same_as: { type: ['string', 'null'], description: 'If it reports the SAME specific event as an existing story, that story id; or "a:N" for an earlier headline N in this list about the same event. Otherwise null. Be strict: same event, not just same topic.' }
           },
           required: ['i', 'keep', 'same_as']
@@ -782,7 +831,7 @@ export function pickFair(groups, max) {
 // credited to the outlet. An AI check makes sure the other article is about
 // the same specific event; if nothing matches, the story keeps its coloured
 // box with the outlet's name rather than showing a wrong picture.
-const UA = { 'User-Agent': 'Mozilla/5.0 (compatible; RumourRadar/1.2; personal news reader)' };
+const UA = BROWSER;
 const BAD_IMAGE = /logo|placeholder|default[-_.]|fallback|sprite|icon|avatar|blank|1x1|pixel|og-default|share-default|social-default/i;
 const hostOf = (u) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return ''; } };
 
@@ -845,12 +894,27 @@ export async function fillMissingImages(stories, apiKey) {
   const cutoff = new Date(Date.now() - 72 * 3600e3).toISOString();
   // Pictures found by the old Wikipedia method are often off-topic: remove them.
   for (const s of stories) if (s.image_credit === 'Wikipedia') { s.image = ''; delete s.image_credit; s.pic_checked = 0; }
-  const need = stories
+  let need = stories
     .filter((s) => !s.image && !(s.sources || []).some((x) => x.image) && (s.pic_checked || 0) < 3 && (s.last_updated || '') >= cutoff)
     .sort((a, b) => (b.last_updated || '').localeCompare(a.last_updated || ''))
     .slice(0, 120);
   if (!need.length) return;
   const started = Date.now();
+
+  // 0. the story's own articles: find the real address behind Google News links and read the picture there
+  let own = 0;
+  for (const part of chunk(need, 6)) {
+    await Promise.all(part.map(async (s) => {
+      for (const src of (s.sources || []).slice(0, 3)) {
+        const a = await fetchArticle(src.link);
+        if (a.url && a.url !== src.link && !/news\.google\.com/.test(a.url)) src.link = a.url;
+        if (a.image && !BAD_IMAGE.test(a.image)) { s.image = a.image; src.image = a.image; own++; return; }
+      }
+    }));
+  }
+  log(`Pictures from the stories' own articles: ${own} of ${need.length}.`);
+  need = need.filter((s) => !s.image);
+  if (!need.length) return;
 
   // 1. a search query for each story
   for (const part of chunk(need, 60)) {
@@ -934,7 +998,7 @@ const SECTION_FOCUS = {
   Tech: 'tech, AI, gadgets, big tech companies, startups and venture capital',
   Finance: 'markets, companies, earnings, deals, central banks and the economy',
   World: 'major world and political news, and what it could mean for markets',
-  Fashion: 'fashion, luxury, beauty, designers, collections and shows, and the business of fashion (luxury groups and retailers)'
+  Fashion: 'luxury and high fashion: luxury houses and groups, major designers and creative directors, the big fashion weeks, and the business of luxury'
 };
 
 export async function makeSectionBriefs(stories, apiKey, now = new Date()) {
@@ -979,6 +1043,14 @@ export async function main() {
   const feeds = await readJSON(FEEDS_FILE, []);
   const news = await readJSON(NEWS_FILE, { updated: null, stories: [] });
   let seen = await readJSON(SEEN_FILE, []);
+  // Once: clear out fashion stories from the broad sources that were removed (local fashion weeks, regional retail…).
+  if (!news.fashion_v2) {
+    const LUXURY = /WWD|Business of Fashion|Financial Times|^FT|Vogue|Telegraph|Guardian|Harper|Highsnobiety|Hypebeast|Elle|GQ|Reuters|Bloomberg|Wall Street Journal|WSJ|New York Times|Economist|Jing Daily|Robb Report/i;
+    const before = news.stories.length;
+    news.stories = news.stories.filter((x) => normSection(x.section) !== 'Fashion' || LUXURY.test(x.sources?.[0]?.name || ''));
+    news.fashion_v2 = 1;
+    log(`Fashion clean-up: removed ${before - news.stories.length} off-topic stories.`);
+  }
   // Once: give fashion articles skipped by older versions a second chance.
   if (!news.fashion_reset) {
     const before = seen.length;
