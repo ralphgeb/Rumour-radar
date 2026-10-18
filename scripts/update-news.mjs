@@ -5,7 +5,7 @@
 //   2. a quick, cheap pass over the headlines only: drops junk and groups
 //      articles about the same event, so each story is analysed once
 //   3. opens each remaining article to find its picture and read its text
-//   4. asks Claude to write a summary, key points and a full write-up of each
+//   4. asks Claude to read each article and write a summary and key points for each
 //      story in its own words, flag rumours with how likely they are to be
 //      true, and list the stocks the story could move
 //   5. writes the morning / evening tech briefing for the Today tab
@@ -28,11 +28,12 @@ const KEEP_DAYS = 4;           // drop stories older than this
 const MAX_STORIES = 600;       // keep the data file small and fast
 const MAX_SEEN = 8000;         // how many article links to remember
 const ARTICLE_CHARS = 6000;    // how much of each article the AI reads
-const UPGRADE_MAX = 36;        // older stories per run that get a write-up added
+const UPGRADE_MAX = 20;        // older stories per run that get key points added
 // Share of each run's full analyses per section, so no section crowds out the others.
-const SECTION_SHARE = { Tech: 0.4, Finance: 0.35, World: 0.25 };
+const SECTION_SHARE = { Tech: 0.35, Finance: 0.27, World: 0.2, Fashion: 0.18 };
 // Sources that never appear in the app.
 const BLOCKED = /cnbc/i;
+const FASHION_OUTLETS = /WWD|Business of Fashion|Vogue|Harper's Bazaar|Fashionista|Highsnobiety|Hypebeast|Telegraph Fashion|Guardian Fashion/i;
 
 import { parseFeed, findMetaImage, stripHtml } from './feed-parser.mjs';
 import { updateStocks, validSymbol } from './stocks.mjs';
@@ -58,11 +59,11 @@ export const TOPICS = [
   'Banks & Finance', 'Deals & Mergers', 'Policy & Regulation', 'Energy', 'Cars', 'Space',
   'Science', 'Health & Biotech', 'Retail', 'Telecoms', 'UK business',
   'World politics', 'Conflict & security', 'Elections', 'Trade & tariffs', 'Central banks',
-  'Commodities', 'Climate', 'Other'
+  'Commodities', 'Climate', 'Fashion & Luxury', 'Beauty', 'Designers & Shows', 'Other'
 ];
 
 // Sections in the app's News tab. Older data used finer sections.
-export const normSection = (s) => (/^(markets|finance)$/i.test(s || '') ? 'Finance' : /^world$/i.test(s || '') ? 'World' : 'Tech');
+export const normSection = (s) => (/^(markets|finance)$/i.test(s || '') ? 'Finance' : /^world$/i.test(s || '') ? 'World' : /^fashion$/i.test(s || '') ? 'Fashion' : 'Tech');
 const sourceEntry = (a) => ({ name: a.source, title: a.title, link: a.link, published: a.published, image: a.image || '' });
 const chunk = (arr, n) => Array.from({ length: Math.ceil(arr.length / n) }, (_, i) => arr.slice(i * n, i * n + n));
 async function runParallel(items, limit, fn) {
@@ -210,13 +211,12 @@ const ANALYSIS_TOOL = {
           type: 'object',
           properties: {
             article_index: { type: 'integer' },
-            keep: { type: 'boolean', description: 'true for real news: tech, AI, gadgets, science, companies, finance, markets, economics, and significant world/political news. false for sport, celebrity gossip, lifestyle, recipes, horoscopes, shopping deals/coupons, podcasts/newsletters with no news, and puzzles.' },
+            keep: { type: 'boolean', description: 'true for real news: tech, AI, gadgets, science, companies, finance, markets, economics, significant world/political news, and fashion news (collections, shows, designers, brands, luxury and beauty business). false for sport, celebrity gossip, recipes, horoscopes, shopping deals/coupons and "best buys" edits, podcasts/newsletters with no news, and puzzles.' },
             same_story_as: { type: ['string', 'null'], description: 'If this article covers the SAME specific claim/event as an existing story, that story id (e.g. "a1b2c3d4e5"), or "article:N" for an earlier article in this batch. Otherwise null.' },
             status: { type: 'string', enum: ['rumour', 'confirmed', 'denied', 'news'], description: 'rumour = unconfirmed claim (leaks, "reportedly", "sources say", analyst predictions of company plans, "in talks"), including unconfirmed political or world developments that could move markets (e.g. possible tariffs, sanctions, rate decisions, ceasefires, government interventions). confirmed = an official announcement that confirms a previously rumoured claim. denied = officially denied. news = ordinary confirmed news.' },
             claim: { type: 'string', description: 'One short, neutral sentence in your own words stating the core news or claim. Max 140 chars.' },
-            summary: { type: 'string', description: 'A proper summary in your own words: 4-6 sentences (about 80-130 words) covering what happened, the most important details and numbers, who is involved, and why it matters.' },
-            key_points: { type: 'array', items: { type: 'string' }, description: '4-6 bullet points with the key facts, figures and implications, in your own words. Each one a full sentence.' },
-            story: { type: 'string', description: 'The full story written in your own words for a reader who will not open the original: 250-450 words in 3-5 paragraphs separated by a blank line, covering what happened, all the key details and figures, background and context, reactions, and what comes next. Base it only on the article text given; never invent facts, numbers or quotes. Do not copy sentences from the article. If only a short snippet is available, write 80-150 words and stick to what is known.' },
+            summary: { type: 'string', description: 'A proper summary in your own words, based on the full article text: 4-6 sentences (about 80-130 words) covering what happened, the most important details and numbers, who is involved, and why it matters.' },
+            key_points: { type: 'array', items: { type: 'string' }, description: '4-6 bullet points with the key facts, figures, background and what happens next, in your own words. Each one a full sentence. Never invent facts.' },
             likelihood: { type: ['integer', 'null'], description: 'For rumours: estimated % chance the claim turns out true (5-95). confirmed=100, denied=5, news=null.' },
             likelihood_reason: { type: 'string', description: 'One or two sentences on why you gave that likelihood. Empty for news.' },
             signals: { type: 'array', items: { type: 'string' }, description: 'Short credibility signals for rumours, e.g. "Reliable source: Bloomberg", "Single anonymous source", "Company declined to comment". Empty for news.' },
@@ -240,7 +240,7 @@ const ANALYSIS_TOOL = {
               }
             }
           },
-          required: ['article_index', 'keep', 'same_story_as', 'status', 'claim', 'summary', 'key_points', 'story', 'likelihood', 'likelihood_reason', 'signals', 'topics', 'overall_impact', 'market_take', 'image_subject', 'stocks']
+          required: ['article_index', 'keep', 'same_story_as', 'status', 'claim', 'summary', 'key_points', 'likelihood', 'likelihood_reason', 'signals', 'topics', 'overall_impact', 'market_take', 'image_subject', 'stocks']
         }
       }
     },
@@ -248,7 +248,7 @@ const ANALYSIS_TOOL = {
   }
 };
 
-const SYSTEM = `You are the analysis engine of a news app with three sections: Tech (tech, AI, gadgets, companies, VC), Finance (markets, companies, economy) and World (major world and political news). For every article you write a short neutral summary, key points and a full write-up of the story in your own words, decide whether it is confirmed news or an unconfirmed RUMOUR, estimate how likely rumours are to be true, and list the stocks the story could move.
+const SYSTEM = `You are the analysis engine of a news app with four sections: Tech (tech, AI, gadgets, companies, VC), Finance (markets, companies, economy), World (major world and political news) and Fashion (fashion, luxury, beauty, designers, shows and the business of fashion). For every article you read the text given and write a neutral summary and key points in your own words, decide whether it is confirmed news or an unconfirmed RUMOUR, estimate how likely rumours are to be true, and list the stocks the story could move.
 
 Writing: clear, neutral, British English, no hype. Everything must be in your own words; never copy sentences from the articles and never invent facts, figures or quotes.
 
@@ -260,6 +260,8 @@ Estimating likelihood (be calibrated, not dramatic):
 - Hedged language ("could", "might consider", "early talks") lowers likelihood; specific details (dates, prices, part numbers) raise it.
 - Official denial: low. Official confirmation: status "confirmed", 100.
 - Long-range predictions (years out) are less certain.
+
+Fashion news: cover the designers, brands, collections and business angle; luxury groups and retailers (e.g. LVMH MC.PA, Kering KER.PA, Hermès RMS.PA, Richemont CFR.SW, Prada 1913.HK, Burberry BRBY.L, Inditex ITX.MC, Moncler MONC.MI) are the usual stocks. Celebrity and red-carpet style stories usually move no stocks.
 
 World and political news: say plainly what happened and, where relevant, how it could affect markets (indices, currencies, commodities, sectors). Unconfirmed reports of market-moving decisions are rumours.
 
@@ -335,7 +337,7 @@ const TRIAGE_TOOL = {
           type: 'object',
           properties: {
             i: { type: 'integer', description: 'Headline number.' },
-            keep: { type: 'boolean', description: 'false for sport, celebrity, lifestyle, recipes, horoscopes, shopping deals, puzzles, podcasts/newsletters with no news, and trivial items. true for real tech, business, finance, economic, political and world news.' },
+            keep: { type: 'boolean', description: 'false for sport, celebrity gossip, recipes, horoscopes, shopping deals and "best buys" lists, puzzles, podcasts/newsletters with no news, and trivial items. true for real tech, business, finance, economic, political and world news. For Fashion headlines, keep real fashion news: collections, shows, designers and creative directors, brands, luxury and retail business, trends and beauty industry news; drop pure shopping edits, horoscopes and celebrity gossip.' },
             same_as: { type: ['string', 'null'], description: 'If it reports the SAME specific event as an existing story, that story id; or "a:N" for an earlier headline N in this list about the same event. Otherwise null. Be strict: same event, not just same topic.' }
           },
           required: ['i', 'keep', 'same_as']
@@ -346,7 +348,7 @@ const TRIAGE_TOOL = {
   }
 };
 
-const TRIAGE_SYSTEM = 'You sort incoming news headlines for a news app (sections: Tech, Finance, World). For every headline decide whether to keep it and whether it duplicates an existing story or an earlier headline in the list. Call record_triage once with one item per headline.';
+const TRIAGE_SYSTEM = 'You sort incoming news headlines for a news app (sections: Tech, Finance, World, Fashion). For every headline decide whether to keep it and whether it duplicates an existing story or an earlier headline in the list. Call record_triage once with one item per headline.';
 
 async function triageBatch(batch, recent, apiKey) {
   const existing = recent.map((s) => `${s.id} | ${s.headline || s.claim}`).join('\n') || '(none)';
@@ -435,7 +437,6 @@ export function sanitise(an) {
     claim: trim(an.claim, 200),
     summary: trim(an.summary, 1200),
     key_points: (an.key_points || []).map((p) => trim(p, 300)).filter(Boolean).slice(0, 6),
-    story: trimKeepParas(an.story, 5000),
     likelihood,
     likelihood_reason: trim(an.likelihood_reason, 400),
     signals: (an.signals || []).map((s) => trim(s, 80)).filter(Boolean).slice(0, 6),
@@ -479,16 +480,14 @@ export function mergeBatch(stories, batch, analyses, now = new Date().toISOStrin
         target.likelihood = clean.likelihood;
         target.likelihood_reason = clean.likelihood_reason;
         target.resolved_at = now;
-        // a confirmation is new information, so its write-up replaces the old one
-        if (clean.story) { target.story = clean.story; target.summary = clean.summary; target.key_points = clean.key_points; }
+        // a confirmation is new information, so its summary replaces the old one
+        if (clean.summary) { target.summary = clean.summary; if (clean.key_points.length) target.key_points = clean.key_points; }
       } else if (target.status === 'rumour' && clean.status === 'rumour') {
         target.likelihood = clean.likelihood; // newest estimate, made knowing there are more outlets
         target.likelihood_reason = clean.likelihood_reason;
       }
-      // keep the richest write-up
-      if ((clean.story || '').length > (target.story || '').length * 1.3) {
-        target.story = clean.story; target.key_points = clean.key_points;
-      }
+      // keep the richest key points
+      if (clean.key_points.join(' ').length > (target.key_points || []).join(' ').length * 1.3) target.key_points = clean.key_points;
       target.signals = [...new Set([...clean.signals, ...(target.signals || [])])].slice(0, 8);
       target.topics = [...new Set([...target.topics, ...clean.topics])].filter((t) => t !== 'Other' || target.topics.length === 1);
       if (IMPACT_RANK[clean.overall_impact] > IMPACT_RANK[target.overall_impact]) target.overall_impact = clean.overall_impact;
@@ -530,7 +529,7 @@ const BRIEFING_TOOL = {
     type: 'object',
     properties: {
       title: { type: 'string', description: 'A punchy front-page headline for this briefing, max 70 chars, naming the biggest story.' },
-      intro: { type: 'string', description: '3-4 sentences giving the big picture of what happened in this period, like the opening of a newspaper front page.' },
+      intro: { type: 'string', description: 'A proper overview of the main events of this period, like the front page of a newspaper: 2-3 short paragraphs separated by a blank line (about 150-220 words), covering the biggest stories, what they mean and how they connect. Your own words; never invent facts.' },
       top_stories: {
         type: 'array', description: 'The 5-7 most important stories, most important first.',
         items: { type: 'object', properties: {
@@ -599,7 +598,7 @@ export async function makeBriefing(stories, apiKey, now = new Date()) {
     covers_from: since,
     story_count: pool.length,
     title: trim(input.title, 100),
-    intro: trim(input.intro, 900),
+    intro: trimKeepParas(input.intro, 2000),
     top_stories: (input.top_stories || []).filter(okId).slice(0, 7).map((x) => ({ story_id: x.story_id, title: trim(x.title, 120), summary: trim(x.summary, 500) })),
     rumour_watch: (input.rumour_watch || []).filter(okId).slice(0, 4).map((x) => ({ story_id: x.story_id, note: trim(x.note, 300) })),
     stocks_to_watch: (input.stocks_to_watch || []).filter((x) => /^[A-Z0-9.\-^=]{1,15}$/i.test(x.ticker || '')).slice(0, 6).map((x) => ({
@@ -626,7 +625,7 @@ export async function upgradeOld(stories, apiKey) {
   const cutoff = new Date(Date.now() - 48 * 3600e3).toISOString();
   const pub = (s) => s.first_published || s.first_seen || '';
   const needWriteUp = stories
-    .filter((s) => !s.story && !s.upgrade_tried && pub(s) >= cutoff)
+    .filter((s) => !(s.key_points || []).length && !s.upgrade_tried && pub(s) >= cutoff)
     .sort((a, b) => pub(b).localeCompare(pub(a)))
     .slice(0, UPGRADE_MAX);
   const needImage = stories.filter((s) => !s.image && !s.image_checked && !needWriteUp.includes(s)).slice(0, 60);
@@ -659,7 +658,6 @@ export async function upgradeOld(stories, apiKey) {
         const c = sanitise(an);
         if (c.summary) s.summary = c.summary;
         if (c.key_points.length) s.key_points = c.key_points;
-        if (c.story) s.story = c.story;
         if (!s.market_take && c.market_take) s.market_take = c.market_take;
         if (!(s.stocks || []).length && c.stocks.length) s.stocks = c.stocks;
         if (!s.image && a.image) s.image = a.image;
@@ -672,7 +670,7 @@ export async function upgradeOld(stories, apiKey) {
     }
     batch.forEach((a) => { a.story.upgrade_tried = true; a.story.image_checked = true; });
   }
-  log(`Upgraded ${done} older stories with write-ups; checked ${needImage.length} for pictures.`);
+  log(`Upgraded ${done} older stories with key points; checked ${needImage.length} for pictures.`);
 }
 
 // ---------- Fair mix: share each run between sections and outlets ----------
@@ -698,57 +696,107 @@ export function pickFair(groups, max) {
 }
 
 // ---------- Pictures from Wikipedia when a site doesn't give one ----------
+// Many sites (Bloomberg, FT, WSJ, Reuters via Google News…) don't share a
+// picture. For those we find a freely licensed one on Wikipedia: first from
+// the exact subjects the AI suggests (company, person, place…), then by
+// searching Wikipedia, and finally from a broader topic picture.
+const WIKI_HEADERS = { 'User-Agent': 'RumourRadar/1.1 (personal news app)', Accept: 'application/json' };
+const bigThumb = (u) => (u || '').replace(/\/(\d+)px-/, '/800px-');
+const isLogo = (u) => /\.svg|logo|icon|flag_of|coat_of_arms|wordmark/i.test(u || '');
+
 async function wikiImage(title) {
   if (!title) return '';
   try {
-    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}?redirect=true`, {
-      headers: { 'User-Agent': 'RumourRadar/1.0 (personal news app)', Accept: 'application/json' }
-    });
+    const res = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}?redirect=true`, { headers: WIKI_HEADERS });
     if (!res.ok) return '';
     const j = await res.json();
     if (j.type === 'disambiguation') return '';
     const thumb = j.thumbnail?.source || '';
-    if (thumb) return thumb.replace(/\/(\d+)px-/, '/800px-');
+    if (thumb && !isLogo(thumb)) return bigThumb(thumb);
     const orig = j.originalimage?.source || '';
-    return /\.(jpe?g|png|webp)$/i.test(orig) ? orig : '';
+    return /\.(jpe?g|png|webp)$/i.test(orig) && !isLogo(orig) ? orig : '';
   } catch { return ''; }
 }
 
+// Wikipedia search: the best-matching articles that have a (non-logo) picture.
+async function wikiSearchImage(query) {
+  if (!query) return '';
+  try {
+    const u = 'https://en.wikipedia.org/w/api.php?action=query&format=json&formatversion=2&origin=*'
+      + `&generator=search&gsrsearch=${encodeURIComponent(query)}&gsrlimit=6&gsrnamespace=0`
+      + '&prop=pageimages&piprop=thumbnail&pithumbsize=800&pilicense=free';
+    const res = await fetch(u, { headers: WIKI_HEADERS });
+    if (!res.ok) return '';
+    const pages = ((await res.json()).query?.pages || []).sort((a, b) => (a.index || 0) - (b.index || 0));
+    const hit = pages.find((p) => p.thumbnail?.source && !isLogo(p.thumbnail.source));
+    return hit ? hit.thumbnail.source : '';
+  } catch { return ''; }
+}
+
+// A sensible picture for the story's broad topic when nothing specific is found.
+const TOPIC_PICTURES = {
+  'Markets & Economy': 'Wall Street', 'Banks & Finance': 'Bank of England', 'Central banks': 'Federal Reserve Building',
+  'Deals & Mergers': 'Wall Street', 'Crypto': 'Bitcoin', 'Commodities': 'Oil platform', 'Energy': 'Oil refinery',
+  'UK business': 'City of London', 'Trade & tariffs': 'Container ship', 'World politics': 'United Nations Headquarters',
+  'Conflict & security': 'United Nations Security Council', 'Elections': 'Ballot box', 'Climate': 'Wind farm',
+  'AI': 'Artificial intelligence', 'Chips': 'Integrated circuit', 'Phones & Gadgets': 'Smartphone', 'Computers': 'Laptop',
+  'Gaming': 'Video game console', 'Space': 'Rocket launch', 'Cars': 'Automobile', 'Tesla & EVs': 'Electric car',
+  'Fashion & Luxury': 'Fashion week', 'Designers & Shows': 'Runway (fashion)', 'Beauty': 'Cosmetics', 'Retail': 'Shopping mall'
+};
+const SECTION_PICTURES = { Finance: 'London Stock Exchange', World: 'Globe', Tech: 'Data center', Fashion: 'Fashion week' };
+
 const SUBJECT_TOOL = {
   name: 'record_subjects',
-  description: 'Record a picture subject for every headline.',
+  description: 'Record picture ideas for every headline.',
   input_schema: { type: 'object', properties: { items: { type: 'array', items: { type: 'object', properties: {
     i: { type: 'integer' },
-    subject: { type: 'string', description: 'Exact English Wikipedia article title whose picture best illustrates the story (company, person, product, institution or place), or "" if nothing fits.' }
-  }, required: ['i', 'subject'] } } }, required: ['items'] }
+    subjects: { type: 'array', items: { type: 'string' }, description: 'Up to 3 exact English Wikipedia article titles whose lead picture would illustrate the story, most specific first: the main company, person, product, building, institution or place (e.g. "Nvidia", "Rachel Reeves", "Bank of England", "Strait of Hormuz", "Chanel"). Prefer people, places and buildings over abstract topics.' },
+    search: { type: 'string', description: '2-4 word Wikipedia search query for a photo that fits the story, e.g. "Paris Fashion Week", "Tokyo Stock Exchange".' }
+  }, required: ['i', 'subjects', 'search'] } } }, required: ['items'] }
 };
 
 export async function fillMissingImages(stories, apiKey) {
   const cutoff = new Date(Date.now() - 72 * 3600e3).toISOString();
-  const need = stories.filter((s) => !s.image && !s.wiki_checked && (s.last_updated || '') >= cutoff).slice(0, 150);
+  // wiki_checked: 2 = checked with the newer, more thorough search
+  const need = stories.filter((s) => !s.image && !(s.sources || []).some((x) => x.image) && (s.wiki_checked || 0) < 2 && (s.last_updated || '') >= cutoff).slice(0, 200);
   if (!need.length) return;
-  // stories from before this version have no picture subject yet: ask for them in one cheap request
-  const noSubject = need.filter((s) => !s.image_subject);
-  for (const part of chunk(noSubject, 80)) {
+  for (const part of chunk(need, 60)) {
     try {
       const input = await callClaude({
-        model: MODEL, max_tokens: 3000,
-        system: 'For each news headline, give the exact English Wikipedia article title whose lead picture would best illustrate it. Call record_subjects once.',
+        model: MODEL, max_tokens: 6000,
+        system: 'You pick illustrations for news headlines from Wikipedia. For each headline give up to 3 exact English Wikipedia article titles whose lead picture would illustrate it, plus a short search query. Call record_subjects once.',
         tools: [SUBJECT_TOOL], tool_choice: { type: 'tool', name: 'record_subjects' },
         messages: [{ role: 'user', content: part.map((s, i) => `[${i}] ${s.headline || s.claim}`).join('\n') }]
       }, apiKey);
-      for (const it of input.items || []) if (part[it.i]) part[it.i].image_subject = trim(it.subject, 100);
-    } catch (e) { if (e.fatal) throw e; log(`Picture subjects skipped: ${e.message}`); }
+      for (const it of input.items || []) {
+        const s = part[it.i]; if (!s) continue;
+        s._subjects = (it.subjects || []).map((x) => trim(x, 100)).filter(Boolean).slice(0, 3);
+        s._search = trim(it.search || '', 80);
+      }
+    } catch (e) { if (e.fatal) throw e; log(`Picture ideas skipped: ${e.message}`); }
   }
+  const cache = new Map();
+  const cached = (key, fn) => { if (!cache.has(key)) cache.set(key, fn()); return cache.get(key); };
   let found = 0;
-  for (const part of chunk(need, 8)) {
+  let generic = 0;
+  for (const part of chunk(need, 6)) {
     await Promise.all(part.map(async (s) => {
-      const img = await wikiImage(s.image_subject);
+      const subjects = [...new Set([...(s._subjects || []), s.image_subject].filter(Boolean))];
+      let img = '';
+      for (const t of subjects) { img = await cached('t:' + t, () => wikiImage(t)); if (img) break; }
+      if (!img) for (const q of [s._search, ...subjects].filter(Boolean)) { img = await cached('q:' + q, () => wikiSearchImage(q)); if (img) break; }
+      if (!img) {
+        const topic = (s.topics || []).find((t) => TOPIC_PICTURES[t]);
+        const fallback = TOPIC_PICTURES[topic] || SECTION_PICTURES[normSection(s.section)];
+        img = await cached('t:' + fallback, () => wikiImage(fallback));
+        if (img) generic++;
+      }
       if (img) { s.image = img; s.image_credit = 'Wikipedia'; found++; }
-      s.wiki_checked = true;
+      s.wiki_checked = 2;
+      delete s._subjects; delete s._search;
     }));
   }
-  log(`Wikipedia pictures: added ${found} of ${need.length} stories that had none.`);
+  log(`Wikipedia pictures: added ${found} of ${need.length} stories that had none (${generic} by topic).`);
 }
 
 // ---------- "Today in Tech / Finance / World" covers ----------
@@ -758,8 +806,8 @@ const SECTION_TOOL = {
   input_schema: { type: 'object', properties: {
     lead_story_id: { type: 'string', description: 'Id of the single most important story right now.' },
     title: { type: 'string', description: 'The main topic of the day as a headline, max 70 chars, in your own words.' },
-    summary: { type: 'string', description: '3-4 sentences on what is happening in this area today, in your own words.' },
-    points: { type: 'array', description: '3-4 other key things happening, each tied to a story.', items: { type: 'object', properties: {
+    summary: { type: 'string', description: 'A proper overview of the main events in this area today: 2-3 short paragraphs separated by a blank line (about 150-220 words), covering the biggest stories, what they mean and how they connect. Your own words; never invent facts.' },
+    points: { type: 'array', description: '4-6 other key things happening, each tied to a story.', items: { type: 'object', properties: {
       story_id: { type: 'string' }, text: { type: 'string', description: 'One sentence, max 120 chars.' }
     }, required: ['story_id', 'text'] } },
     movers: { type: 'array', description: 'Up to 6 stocks, indices, currencies or commodities most affected by today\u2019s news in this area (Yahoo Finance symbols).', items: { type: 'object', properties: {
@@ -770,7 +818,8 @@ const SECTION_TOOL = {
 const SECTION_FOCUS = {
   Tech: 'tech, AI, gadgets, big tech companies, startups and venture capital',
   Finance: 'markets, companies, earnings, deals, central banks and the economy',
-  World: 'major world and political news, and what it could mean for markets'
+  World: 'major world and political news, and what it could mean for markets',
+  Fashion: 'fashion, luxury, beauty, designers, collections and shows, and the business of fashion (luxury groups and retailers)'
 };
 
 export async function makeSectionBriefs(stories, apiKey, now = new Date()) {
@@ -784,7 +833,7 @@ export async function makeSectionBriefs(stories, apiKey, now = new Date()) {
     const ids = new Set(pool.map((s) => s.id));
     try {
       const x = await callClaude({
-        model: BRIEFING_MODEL, max_tokens: 2500,
+        model: BRIEFING_MODEL, max_tokens: 3500,
         system: `You are the ${sec} editor of a news app. Using only the stories given, say what the main topic in ${SECTION_FOCUS[sec]} is right now and summarise what is happening. Neutral, British English, your own words. Call record_section_brief once.`,
         tools: [SECTION_TOOL], tool_choice: { type: 'tool', name: 'record_section_brief' },
         messages: [{ role: 'user', content: pool.map((s) => `${s.id} | ${s.sources.length} outlet(s) | ${s.status} | ${s.headline || s.claim}\n   ${s.summary}${(s.stocks || []).length ? '\n   Stocks: ' + s.stocks.map((k) => `${k.ticker} ${k.direction}`).join(', ') : ''}`).join('\n') }]
@@ -793,8 +842,8 @@ export async function makeSectionBriefs(stories, apiKey, now = new Date()) {
         generated: now.toISOString(),
         lead_story_id: ids.has(x.lead_story_id) ? x.lead_story_id : pool[0].id,
         title: trim(x.title, 100),
-        summary: trim(x.summary, 800),
-        points: (x.points || []).filter((p) => ids.has(p.story_id)).slice(0, 4).map((p) => ({ story_id: p.story_id, text: trim(p.text, 160) })),
+        summary: trimKeepParas(x.summary, 2000),
+        points: (x.points || []).filter((p) => ids.has(p.story_id)).slice(0, 6).map((p) => ({ story_id: p.story_id, text: trim(p.text, 160) })),
         movers: (x.movers || []).filter((m) => /^[A-Z0-9.\-^=]{1,15}$/i.test(m.ticker || '')).slice(0, 6).map((m) => ({
           ticker: m.ticker.toUpperCase(), name: trim(m.name, 50), direction: ['up', 'down', 'mixed'].includes(m.direction) ? m.direction : 'mixed', note: trim(m.note, 100)
         }))
@@ -900,6 +949,8 @@ export async function main() {
   for (const s of news.stories) {
     if (!s.headline) s.headline = s.sources?.[0]?.title || s.claim;
     s.section = normSection(s.section);
+    // fashion stories saved before the Fashion section existed
+    if (s.section === 'Tech' && FASHION_OUTLETS.test(s.sources?.[0]?.name || '')) s.section = 'Fashion';
   }
   try { await upgradeOld(news.stories, apiKey); } catch (e) {
     if (e.fatal) { console.error('\n❌ ' + e.message + '\n'); process.exit(1); }
