@@ -43,6 +43,7 @@ const FASHION_OUTLETS = /WWD|Business of Fashion|Vogue|Harper's Bazaar|Fashionis
 
 import { parseFeed, findMetaImage, stripHtml } from './feed-parser.mjs';
 import { updateStocks, validSymbol } from './stocks.mjs';
+import { vapidKeys, ensurePublicKey, saveFromApp, sendMorning } from './push.mjs';
 import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
@@ -658,6 +659,7 @@ const BRIEFING_TOOL = {
     type: 'object',
     properties: {
       title: { type: 'string', description: 'A punchy front-page headline for this briefing, max 70 chars, naming the biggest story.' },
+      notification: { type: 'string', description: 'A catchy one-line teaser of the biggest story for a phone notification, max 110 characters, in your own words, no emoji, no clickbait: make the reader want to open the app.' },
       intro: { type: 'string', description: 'A proper overview of the main events of this period, like the front page of a newspaper: 2-3 short paragraphs separated by a blank line (about 150-220 words), covering the biggest stories, what they mean and how they connect. Your own words; never invent facts.' },
       top_stories: {
         type: 'array', description: 'The 5-7 most important stories, most important first.',
@@ -690,7 +692,7 @@ const BRIEFING_TOOL = {
         }, required: ['story_id', 'line'] }
       }
     },
-    required: ['title', 'intro', 'top_stories', 'rumour_watch', 'stocks_to_watch', 'in_brief']
+    required: ['title', 'notification', 'intro', 'top_stories', 'rumour_watch', 'stocks_to_watch', 'in_brief']
   }
 };
 
@@ -727,6 +729,7 @@ export async function makeBriefing(stories, apiKey, now = new Date()) {
     covers_from: since,
     story_count: pool.length,
     title: trim(input.title, 100),
+    notification: trim(input.notification, 140),
     intro: trimKeepParas(input.intro, 2000),
     top_stories: (input.top_stories || []).filter(okId).slice(0, 7).map((x) => ({ story_id: x.story_id, title: trim(x.title, 120), summary: trim(x.summary, 500) })),
     rumour_watch: (input.rumour_watch || []).filter(okId).slice(0, 4).map((x) => ({ story_id: x.story_id, note: trim(x.note, 300) })),
@@ -861,6 +864,43 @@ async function bingNews(query) {
   }).filter((c) => c.title && c.link);
 }
 
+// Google News search: shows each article with the publisher's own thumbnail,
+// even for sites that block us from opening the article (Reuters, FT, Bloomberg,
+// WSJ, NYT…). We only use it when the result's headline matches ours.
+const words = (t) => new Set(String(t || '').toLowerCase().normalize('NFKD').replace(/[^a-z0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2));
+export function sameHeadline(a, b) {
+  const A = words(a); const B = words(b);
+  if (!A.size || !B.size) return false;
+  let both = 0; for (const w of A) if (B.has(w)) both++;
+  return both / Math.min(A.size, B.size) >= 0.8 || both / new Set([...A, ...B]).size >= 0.6;
+}
+export function parseGoogleNewsPage(html) {
+  const out = [];
+  for (const [block] of html.matchAll(/<article\b[\s\S]*?<\/article>/gi)) {
+    const titles = [...block.matchAll(/<a\b[^>]*>([^<]{15,300})<\/a>/gi)].map((m) => m[1].trim());
+    const title = titles.sort((x, y) => y.length - x.length)[0] || '';
+    const imgs = [...block.matchAll(/<img\b[^>]*>/gi)].map((m) => m[0]).filter((t) => !/favicon|faviconV2|-w16-|-h16-/i.test(t));
+    let src = '';
+    for (const t of imgs) {
+      const set = (t.match(/srcset="([^"]+)"/i) || [])[1];
+      const one = set ? set.split(',').map((x) => x.trim().split(/\s+/)[0]).pop() : (t.match(/\ssrc="([^"]+)"/i) || [])[1];
+      if (one && /attachments|googleusercontent|gstatic/.test(one)) { src = one; break; }
+    }
+    if (!title || !src) continue;
+    src = src.replace(/&amp;/g, '&');
+    if (src.startsWith('/')) src = 'https://news.google.com' + src;
+    src = src.replace(/=-?w\d+-h\d+/, '=-w800-h450');
+    out.push({ title: title.replace(/&amp;/g, '&').replace(/&#39;/g, "'").replace(/&quot;/g, '"'), image: src });
+  }
+  return out;
+}
+async function googleNewsThumb(headline) {
+  if (!headline) return '';
+  const html = await getText(`https://news.google.com/search?q=${encodeURIComponent(headline.slice(0, 140))}&hl=en-GB&gl=GB&ceid=GB:en`, 10000);
+  const hit = parseGoogleNewsPage(html).find((c) => sameHeadline(c.title, headline));
+  return hit ? hit.image : '';
+}
+
 // GDELT: a free index of world news, with each article's share picture.
 let lastGdelt = 0;
 async function gdelt(query) {
@@ -897,7 +937,7 @@ export async function fillMissingImages(stories, apiKey) {
   let need = stories
     .filter((s) => !s.image && !(s.sources || []).some((x) => x.image) && (s.pic_checked || 0) < 3 && (s.last_updated || '') >= cutoff)
     .sort((a, b) => (b.last_updated || '').localeCompare(a.last_updated || ''))
-    .slice(0, 120);
+    .slice(0, 200);
   if (!need.length) return;
   const started = Date.now();
 
@@ -913,6 +953,20 @@ export async function fillMissingImages(stories, apiKey) {
     }));
   }
   log(`Pictures from the stories' own articles: ${own} of ${need.length}.`);
+  need = need.filter((s) => !s.image);
+  if (!need.length) return;
+
+  // 0b. the publisher's own thumbnail from Google News (for sites that block us)
+  let gn = 0;
+  for (const part of chunk(need, 4)) {
+    await Promise.all(part.map(async (s) => {
+      for (const t of [...new Set([s.sources?.[0]?.title, s.headline].filter(Boolean))]) {
+        const img = await googleNewsThumb(t);
+        if (img) { s.image = img; gn++; return; }
+      }
+    }));
+  }
+  log(`Pictures from Google News thumbnails: ${gn} of ${need.length}.`);
   need = need.filter((s) => !s.image);
   if (!need.length) return;
 
@@ -985,6 +1039,7 @@ const SECTION_TOOL = {
   input_schema: { type: 'object', properties: {
     lead_story_id: { type: 'string', description: 'Id of the single most important story right now.' },
     title: { type: 'string', description: 'The main topic of the day as a headline, max 70 chars, in your own words.' },
+    notification: { type: 'string', description: 'A catchy one-line teaser of the biggest story for a phone notification, max 110 characters, in your own words, no emoji, no clickbait: make the reader want to open the app.' },
     summary: { type: 'string', description: 'A proper overview of the main events in this area today: 2-3 short paragraphs separated by a blank line (about 150-220 words), covering the biggest stories, what they mean and how they connect. Your own words; never invent facts.' },
     points: { type: 'array', description: '4-6 other key things happening, each tied to a story.', items: { type: 'object', properties: {
       story_id: { type: 'string' }, text: { type: 'string', description: 'One sentence, max 120 chars.' }
@@ -992,7 +1047,7 @@ const SECTION_TOOL = {
     movers: { type: 'array', description: 'Up to 6 stocks, indices, currencies or commodities most affected by today\u2019s news in this area (Yahoo Finance symbols).', items: { type: 'object', properties: {
       ticker: { type: 'string' }, name: { type: 'string' }, direction: { type: 'string', enum: ['up', 'down', 'mixed'] }, note: { type: 'string', description: 'Max 80 chars.' }
     }, required: ['ticker', 'name', 'direction', 'note'] } }
-  }, required: ['lead_story_id', 'title', 'summary', 'points', 'movers'] }
+  }, required: ['lead_story_id', 'title', 'notification', 'summary', 'points', 'movers'] }
 };
 const SECTION_FOCUS = {
   Tech: 'tech, AI, gadgets, big tech companies, startups and venture capital',
@@ -1021,6 +1076,7 @@ export async function makeSectionBriefs(stories, apiKey, now = new Date()) {
         generated: now.toISOString(),
         lead_story_id: ids.has(x.lead_story_id) ? x.lead_story_id : pool[0].id,
         title: trim(x.title, 100),
+        notification: trim(x.notification, 140),
         summary: trimKeepParas(x.summary, 2000),
         points: (x.points || []).filter((p) => ids.has(p.story_id)).slice(0, 6).map((p) => ({ story_id: p.story_id, text: trim(p.text, 160) })),
         movers: (x.movers || []).filter((m) => /^[A-Z0-9.\-^=]{1,15}$/i.test(m.ticker || '')).slice(0, 6).map((m) => ({
@@ -1081,6 +1137,12 @@ export async function main() {
 
   // Quick updates: 'stocks' when you add a stock or refresh the Stocks tab, 'prices' every hour on weekdays.
   const MODE = (process.env.MODE || 'full').toLowerCase();
+
+  // Morning notifications: keys, sign-ups from the app, and the ~7:00 send.
+  const pushKeys = vapidKeys(process.env.PUSH_SECRET || apiKey);
+  await ensurePublicKey(DATA_DIR, pushKeys);
+  if (MODE === 'subscribe') { await saveFromApp(DATA_DIR, pushKeys, process.env.PUSH, log); return; }
+  if (MODE === 'notify') { await sendMorning(DATA_DIR, pushKeys, briefing, log); return; }
 
   // The worldwide stock list for the app's search box: built when missing, then once a week.
   if (MODE !== 'prices') {

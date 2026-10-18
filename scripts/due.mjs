@@ -3,6 +3,7 @@
 // late, or skips some, so instead of trusting the exact start time, the workflow
 // checks every 30 minutes and catches up on anything that is due.
 //   full   = news + Today briefing (once a day from 5:00, until it has run)
+//   notify = the morning notification (from about 7:00, once the briefing is ready)
 //   prices = stock prices (weekdays, about once an hour, 7:00 to 22:30)
 //   none   = nothing to do
 import fs from 'node:fs';
@@ -38,6 +39,14 @@ for (const s of SLOTS) {
     mode = 'full';
     why = `The ${s.name} update is due (last news update: ${lastNews ? new Date(lastNews).toISOString() : 'never'}).`;
   }
+}
+// Morning notification: from 6:55, once the day's briefing is ready, once a day.
+const NOTIFY_AT = 6 * 60 + 55;
+const push = read('push.json');
+if (mode === 'none' && Object.keys(push.devices || {}).length && mins >= NOTIFY_AT && mins < 13 * 60
+    && lastNews >= londonToday(SLOTS[0].at) && time(push.lastSent) < londonToday(NOTIFY_AT)) {
+  mode = 'notify';
+  why = 'The morning notification is due.';
 }
 if (mode === 'none' && weekday && mins >= 7 * 60 && mins <= 22 * 60 + 30 && now.getTime() - lastPrices > 50 * 60e3) {
   mode = 'prices';
