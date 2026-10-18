@@ -91,7 +91,7 @@ jobs:
       - name: Install the stock price and notification tools
         if: steps.again.outputs.go == 'true'
         run: |
-          pip install --quiet --upgrade yfinance financedatabase
+          pip install --quiet --upgrade yfinance financedatabase ddgs
           npm install --no-save --no-audit --no-fund --silent web-push@3.6.7
 
       - name: Collect and analyse news
@@ -104,6 +104,7 @@ jobs:
           WATCHLIST: ${{ github.event.inputs.watchlist || '' }}
           AI_BATCH: ${{ github.event_name == 'schedule' }}
           PUSH: ${{ github.event.inputs.push || '' }}
+          BRAVE_API_KEY: ${{ secrets.BRAVE_API_KEY }}
 
       - name: Save results
         if: steps.again.outputs.go == 'true'
