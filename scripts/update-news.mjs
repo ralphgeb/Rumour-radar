@@ -226,6 +226,7 @@ async function fetchArticle(url) {
       redirect: 'follow',
       headers: BROWSER
     });
+    noteStatus(url, 'browser', res.status);
     if (!res.ok || !res.body) return { text: '', image: '', url };
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
@@ -897,6 +898,9 @@ export function parseGoogleNewsPage(html) {
 async function googleNewsThumb(headline) {
   if (!headline) return '';
   const html = await getText(`https://news.google.com/search?q=${encodeURIComponent(headline.slice(0, 140))}&hl=en-GB&gl=GB&ceid=GB:en`, 10000);
+  picStats.gnPages = (picStats.gnPages || 0) + 1;
+  picStats.gnPageBytes = html.length;
+  picStats.gnArticles = (picStats.gnArticles || 0) + (html.match(/<article\b/gi) || []).length;
   const hit = parseGoogleNewsPage(html).find((c) => sameHeadline(c.title, headline));
   return hit ? hit.image : '';
 }
@@ -911,6 +915,47 @@ async function gdelt(query) {
   try {
     return (JSON.parse(txt).articles || []).map((a) => ({ title: a.title || '', outlet: a.domain || hostOf(a.url), link: a.url, image: a.socialimage || '' })).filter((c) => c.title && c.link);
   } catch { return []; }
+}
+
+// Link-preview crawlers: many news sites block ordinary scripts but still give
+// their picture to the bots that build link previews (Facebook, X, Slack, iMessage),
+// because they want their links to look good when shared.
+const PREVIEW_UAS = [
+  'facebookexternalhit/1.1 (+http://www.facebook.com/externalhit_uatext.php)',
+  'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_11_1) AppleWebKit/601.2.4 (KHTML, like Gecko) Version/9.0.1 Safari/601.2.4 facebookexternalhit/1.1 Facebot Twitterbot/1.0',
+  'Twitterbot/1.0',
+  'Slackbot-LinkExpanding 1.0 (+https://api.slack.com/robots)'
+];
+export const picStats = { own: 0, preview: 0, microlink: 0, googleNews: 0, otherOutlets: 0, missing: 0, statuses: {} };
+const noteStatus = (url, how, code) => { const h = hostOf(url); if (!h) return; picStats.statuses[h] ||= {}; picStats.statuses[h][how] = code; };
+async function previewImage(url) {
+  for (const ua of PREVIEW_UAS) {
+    try {
+      const res = await fetch(url, { headers: { 'User-Agent': ua, Accept: 'text/html,*/*' }, redirect: 'follow', signal: AbortSignal.timeout(9000) });
+      noteStatus(url, 'preview', res.status);
+      if (!res.ok || !res.body) continue;
+      const reader = res.body.getReader(); const dec = new TextDecoder(); let html = '';
+      while (html.length < 400_000) { const { value, done } = await reader.read(); if (done) break; html += dec.decode(value, { stream: true }); if (/<\/head>/i.test(html)) break; }
+      reader.cancel().catch(() => {});
+      const img = findMetaImage(html, res.url || url);
+      if (img && !BAD_IMAGE.test(img)) return img;
+    } catch { noteStatus(url, 'preview', 'error'); }
+  }
+  return '';
+}
+// Microlink: a free link-preview service (about 50 look-ups a day without a key).
+let microlinkLeft = 45;
+async function microlinkImage(url) {
+  if (microlinkLeft <= 0) return '';
+  microlinkLeft--;
+  try {
+    const res = await fetch(`https://api.microlink.io/?url=${encodeURIComponent(url)}`, { signal: AbortSignal.timeout(20000) });
+    noteStatus(url, 'microlink', res.status);
+    if (res.status === 429) microlinkLeft = 0;
+    if (!res.ok) return '';
+    const img = (await res.json())?.data?.image?.url || '';
+    return img && !BAD_IMAGE.test(img) ? img : '';
+  } catch { return ''; }
 }
 
 const QUERY_TOOL = {
@@ -934,6 +979,8 @@ export async function fillMissingImages(stories, apiKey) {
   const cutoff = new Date(Date.now() - 72 * 3600e3).toISOString();
   // Pictures found by the old Wikipedia method are often off-topic: remove them.
   for (const s of stories) if (s.image_credit === 'Wikipedia') { s.image = ''; delete s.image_credit; s.pic_checked = 0; }
+  // new ways of finding pictures: give every story another try
+  for (const s of stories) if ((s.pic_v || 0) < 2) { s.pic_v = 2; s.pic_checked = 0; }
   let need = stories
     .filter((s) => !s.image && !(s.sources || []).some((x) => x.image) && (s.pic_checked || 0) < 3 && (s.last_updated || '') >= cutoff)
     .sort((a, b) => (b.last_updated || '').localeCompare(a.last_updated || ''))
@@ -952,7 +999,37 @@ export async function fillMissingImages(stories, apiKey) {
       }
     }));
   }
+  picStats.own = own;
   log(`Pictures from the stories' own articles: ${own} of ${need.length}.`);
+  need = need.filter((s) => !s.image);
+  if (!need.length) return;
+
+  // 0a. ask as a link-preview bot (works for many sites that block us otherwise)
+  let prev = 0;
+  for (const part of chunk(need, 6)) {
+    await Promise.all(part.map(async (s) => {
+      for (const src of (s.sources || []).slice(0, 2)) {
+        if (/news\.google\.com/.test(src.link)) continue;
+        const img = await previewImage(src.link);
+        if (img) { s.image = img; src.image = img; prev++; return; }
+      }
+    }));
+  }
+  picStats.preview = prev;
+  log(`Pictures via link-preview requests: ${prev} of ${need.length}.`);
+  need = need.filter((s) => !s.image);
+  if (!need.length) return;
+
+  // 0c. Microlink link-preview service, for the newest stories still without one
+  let ml = 0;
+  for (const s of need.slice(0, 45)) {
+    const link = (s.sources || []).map((x) => x.link).find((l) => l && !/news\.google\.com/.test(l));
+    if (!link) continue;
+    const img = await microlinkImage(link);
+    if (img) { s.image = img; ml++; }
+  }
+  picStats.microlink = ml;
+  log(`Pictures via Microlink: ${ml}.`);
   need = need.filter((s) => !s.image);
   if (!need.length) return;
 
@@ -966,6 +1043,7 @@ export async function fillMissingImages(stories, apiKey) {
       }
     }));
   }
+  picStats.googleNews = gn;
   log(`Pictures from Google News thumbnails: ${gn} of ${need.length}.`);
   need = need.filter((s) => !s.image);
   if (!need.length) return;
@@ -1029,6 +1107,8 @@ export async function fillMissingImages(stories, apiKey) {
     }));
   }
   for (const s of need) { s.pic_checked = (s.pic_checked || 0) + 1; delete s._q; delete s._cands; }
+  picStats.otherOutlets = found;
+  picStats.missing = need.length - found;
   log(`Pictures from other outlets: found ${found} of ${need.length} stories that had none (${withCands.length} had candidates).`);
 }
 
@@ -1223,7 +1303,7 @@ export async function main() {
   }
   news.updated = new Date().toISOString();
   news.model = MODEL;
-  news.last_run = { ...stats, at: news.updated };
+  news.last_run = { ...stats, at: news.updated, pictures: picStats };
 
   if (shouldMakeBriefing(briefing)) {
     try {
