@@ -688,6 +688,7 @@
     $('#liveStatus').classList.toggle('on', !!token);
     $('#tokenRemove').hidden = !token;
     $('#tokenInput').placeholder = token ? 'Key saved ✓ (paste a new one to replace)' : 'Paste GitHub key (github_pat_…)';
+    window.RR?.renderPush?.();
     applyTheme();
   }
 
@@ -1167,6 +1168,7 @@
       const b = e.target.closest('[data-today]'); if (!b) return;
       todayTopics = [b.dataset.today];
       store.set('rr.todayTopics', todayTopics);
+      pushTopicChanged();
       $$('[data-today]', page).forEach((x) => $('.check', x).classList.toggle('on', x === b));
       state.edition = 0; renderToday(); renderSettings();
     });
@@ -1190,6 +1192,93 @@
   });
   $('#tokenRemove').addEventListener('click', () => { store.del('rr.ghToken'); renderSettings(); toast('Key removed'); });
 
+  // ---------- Morning notifications ----------
+  // The phone's push address is encrypted with the app's public key (made by the
+  // updater) and sent to GitHub with the Live refresh key; only the updater can read it.
+  const b64uToBytes = (t) => Uint8Array.from(atob(t.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((t.length + 3) % 4)), (c) => c.charCodeAt(0));
+  const bytesToB64u = (b) => btoa(String.fromCharCode(...new Uint8Array(b))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  async function seal(pub, obj) {
+    const { subtle } = crypto;
+    const peer = await subtle.importKey('raw', b64uToBytes(pub), { name: 'ECDH', namedCurve: 'P-256' }, false, []);
+    const eph = await subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveBits']);
+    const bits = await subtle.deriveBits({ name: 'ECDH', public: peer }, eph.privateKey, 256);
+    const hk = await subtle.importKey('raw', bits, 'HKDF', false, ['deriveKey']);
+    const key = await subtle.deriveKey({ name: 'HKDF', hash: 'SHA-256', salt: new Uint8Array(), info: new TextEncoder().encode('rr-push') }, hk, { name: 'AES-GCM', length: 256 }, false, ['encrypt']);
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = new Uint8Array(await subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(obj))));
+    const raw = new Uint8Array(await subtle.exportKey('raw', eph.publicKey));
+    const all = new Uint8Array(raw.length + 12 + ct.length);
+    all.set(raw); all.set(iv, raw.length); all.set(ct, raw.length + 12);
+    return bytesToB64u(all);
+  }
+  const pushSupported = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  const isStandalone = () => window.navigator.standalone || window.matchMedia('(display-mode: standalone)').matches;
+  const deviceId = () => { let id = store.get('rr.deviceId', ''); if (!id) { id = bytesToB64u(crypto.getRandomValues(new Uint8Array(12))); store.set('rr.deviceId', id); } return id; };
+
+  async function sendPushInput(push) {
+    const token = store.get('rr.ghToken', '');
+    const repo = repoInfo();
+    if (!token || !repo) throw new Error('Turn on Live refresh first (add your GitHub key below), so the app can tell GitHub where to send notifications.');
+    const gh = github(token, repo);
+    const wf = await findWorkflow(gh);
+    const r = await gh(`/actions/workflows/${wf}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { mode: 'subscribe', watchlist: '-', push } }) });
+    if (r.status === 422) throw new Error('Update your workflow file on GitHub first (see the latest instructions), then try again.');
+    if (!r.ok) throw new Error(`GitHub couldn’t save it (${r.status}). Check your Live refresh key.`);
+  }
+  async function pushSignUp(test) {
+    const res = await fetch('data/push-key.json?t=' + Date.now(), { cache: 'no-store' });
+    if (!res.ok) throw new Error('Not ready yet: run one update on GitHub (Actions → Update news → Run workflow), then try again.');
+    const { publicKey } = await res.json();
+    const reg = await Promise.race([navigator.serviceWorker.ready, sleep(10000).then(() => { throw new Error('The app isn’t fully installed yet. Close it, open it again from your home screen, and try once more.'); })]);
+    let sub = await reg.pushManager.getSubscription();
+    const want = b64uToBytes(publicKey);
+    const same = sub && sub.options?.applicationServerKey && bytesToB64u(sub.options.applicationServerKey) === publicKey;
+    if (sub && !same) { await sub.unsubscribe(); sub = null; }
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: want });
+    const box = await seal(publicKey, { sub: sub.toJSON(), topic: todayTopic(), test });
+    await sendPushInput(`on:${deviceId()}:${box}`);
+  }
+  function renderPush() {
+    const t = $('#pushToggle'); const note = $('#pushNote');
+    if (!t) return;
+    const on = store.get('rr.push', false);
+    t.checked = on && pushSupported() && Notification.permission === 'granted';
+    if (!pushSupported() || !isStandalone()) {
+      t.disabled = true;
+      note.textContent = 'Notifications work in the home-screen app (iOS 16.4 or later). Open Rumour Radar from your home screen to turn them on.';
+    } else {
+      t.disabled = false;
+      note.textContent = t.checked
+        ? `On · a one-line teaser of your ${todayTopic()} briefing at about 7:00 each morning.`
+        : 'A catchy one-line teaser of your Today topic, every morning at about 7:00. Needs Live refresh.';
+    }
+  }
+  $('#pushToggle')?.addEventListener('change', async (e) => {
+    const t = e.target;
+    if (t.checked) {
+      try {
+        const perm = await Notification.requestPermission();
+        if (perm !== 'granted') throw new Error('Notifications are blocked. Allow them in iPhone Settings → Notifications → Radar.');
+        toast('Turning on… a test notification arrives in about a minute.', 4500);
+        await pushSignUp(true);
+        store.set('rr.push', true);
+      } catch (err) { t.checked = false; store.set('rr.push', false); toast(err.message || 'Couldn’t turn on notifications.', 6000); }
+    } else {
+      store.set('rr.push', false);
+      try { const reg = await navigator.serviceWorker.ready; const sub = await reg.pushManager.getSubscription(); await sub?.unsubscribe(); } catch { /* ignore */ }
+      sendPushInput(`off:${deviceId()}`).catch(() => {});
+      toast('Morning notifications off');
+    }
+    renderPush();
+  });
+  // When you change your Today topic, the notification follows it.
+  let pushTopicTimer = null;
+  const pushTopicChanged = () => {
+    if (!store.get('rr.push', false)) return;
+    clearTimeout(pushTopicTimer);
+    pushTopicTimer = setTimeout(() => pushSignUp(false).catch(() => {}), 1500);
+  };
+
   $('#clearCacheBtn').addEventListener('click', async () => {
     try { for (const k of await caches.keys()) await caches.delete(k); } catch { /* ignore */ }
     location.reload();
@@ -1211,8 +1300,10 @@
   }
   $('#todayDone').addEventListener('click', () => $('#todayAsk').close());
   $('#todayAsk').addEventListener('close', () => {
+    const changed = todayTopic() !== (todayPick || 'Tech');
     todayTopics = [todayPick || 'Tech'];
     store.set('rr.todayTopics', todayTopics);
+    if (changed) pushTopicChanged();
     state.edition = 0; renderToday(); renderSettings();
   });
 
@@ -1239,7 +1330,7 @@
   // ---------- shared with stocks.js ----------
   window.RR = Object.assign(window.RR || {}, {
     $, $$, esc, store, toast, ago, chevron, empty, sectionHead, row, media, sourceLine, statusPill, logo, headline, pubTime, lead,
-    pushPage, openStory, runUpdate, hasLiveKey: () => !!store.get('rr.ghToken', '') && !!repoInfo(),
+    renderPush, pushPage, openStory, runUpdate, hasLiveKey: () => !!store.get('rr.ghToken', '') && !!repoInfo(),
     stories: () => stories, byId: (id) => byId.get(id), isRefreshing: () => refreshing,
     backLabel: () => { const l = pages.length ? 'Back' : $(`.view[data-view="${state.tab}"]`).dataset.title; return l.length > 10 ? 'Back' : l; }
   });

@@ -137,6 +137,17 @@ Tapping refresh (or pulling down) updates the **Tube and weather** straight away
 
 ---
 
+## Morning notifications
+
+Rumour Radar can send a notification at about 7:00 each morning with a catchy one-line teaser of your Today topic.
+
+1. Open the app **from your home screen** (notifications don't work in Safari tabs; you need iOS 16.4 or later).
+2. Make sure **Live refresh** is on (Settings → Live refresh).
+3. Go to **Settings → Notifications** and switch on **Morning briefing at 7:00**. Tap **Allow** when asked.
+4. A test notification arrives within about a minute.
+
+How it works: the updater makes the notification keys from your existing `ANTHROPIC_API_KEY` secret, so there's nothing new to set up. Your phone's notification address is encrypted before it is saved on GitHub, so only the updater can read it. If you change your Today topic, the notification follows it. GitHub can start runs a few minutes late, so it usually arrives between 7:00 and 7:15.
+
 ## Using the app
 
 The app has four tabs along the bottom.
