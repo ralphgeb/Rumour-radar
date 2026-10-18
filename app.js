@@ -125,7 +125,9 @@
   let sourceCount = 0;
   let interests = store.get('rr.interests', null);
   let todayTopics = store.get('rr.todayTopics', null); // null until you've been asked
-  const todayList = () => TODAY_OPTIONS.map(([k]) => k).filter((k) => (todayTopics || ['Tech']).includes(k));
+  // Today covers one topic (the first one saved, for anyone who picked several before).
+  const todayTopic = () => TODAY_OPTIONS.map(([k]) => k).find((k) => (todayTopics || ['Tech']).includes(k)) || 'Tech';
+  const paras = (t) => String(t || '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean).map((p) => `<p class="intro">${esc(p)}</p>`).join('');
   const state = {
     tab: 'today',
     edition: 0,
@@ -302,19 +304,14 @@
     return (s.sources?.length || 1) * 2 + (IMPACT[s.overall_impact] || 0) * 2 + (imageOf(s) ? 1 : 0);
   }
 
-  // The other sections you picked for Today, each as its "today" cover.
-  function todaySections(skipFirst) {
-    const secs = briefing.sections || {};
-    let list = todayList().filter((k) => k !== 'Tech' && secs[k]);
-    if (skipFirst) list = list.slice(1);
-    return list.map((k) => sectionHead(k, `Updated ${londonTime(secs[k].generated)}`) + sectionCover(k, secs[k])).join('');
-  }
-  const customiseBtn = `<button class="customise" data-today-topics>Choose what’s on Today</button>`;
+  const customiseBtn = `<button class="customise" data-today-topics>Change topic</button>`;
+  const todayFoot = () => `${customiseBtn}<p class="next">Next briefing ${esc(nextUpdateLabel())} London time.</p>
+      <p class="disclaimer">Written by AI from the day’s headlines. It can make mistakes. Not financial advice.</p>`;
 
   function renderToday() {
-    const topics = todayList();
-    if (!topics.includes('Tech')) { renderTodayNoTech(topics); return; }
-    const onlyTech = topics.length === 1;
+    const topic = todayTopic();
+    if (topic !== 'Tech') { renderTodaySection(topic); return; }
+    const onlyTech = true;
     const eds = briefing.editions || [];
     const ed = eds[state.edition] || eds[0];
     $('#todayEyebrow').textContent = ed ? `${ed.edition} ${onlyTech ? 'tech ' : ''}briefing · ${londonDay(ed.generated, { weekday: 'long', day: 'numeric', month: 'long' })}` : londonDay(new Date().toISOString());
@@ -324,7 +321,7 @@
       if (!stories.length) { $('#todayBody').innerHTML = empty('☀️', 'Your first briefing is on its way', `Briefings arrive at 7:30 and 17:00 London time. The next one is ${nextUpdateLabel()}.`); return; }
       const top = stories.filter((s) => sectionOf(s) === 'Tech').sort((a, b) => storyScore(b) - storyScore(a)).slice(0, 6);
       $('#todayBody').innerHTML = `<p class="next" style="margin-top:0">Your first full tech briefing arrives ${esc(nextUpdateLabel())}. Here are the biggest tech stories so far.</p>
-        ${top.map((s, i) => topCard(s, i + 1, headline(s), s.summary)).join('')}${todaySections()}${customiseBtn}`;
+        ${top.map((s, i) => topCard(s, i + 1, headline(s), s.summary)).join('')}${customiseBtn}`;
       return;
     }
 
@@ -342,7 +339,7 @@
           <div class="cmeta">${ed.story_count || stories.length} stories reviewed · ${esc(time)}</div>
         </div>
       </a>
-      <p class="intro">${esc(ed.intro)}</p>`;
+      ${paras(ed.intro)}`;
 
     if (items.length) {
       html += sectionHead('Top stories', `${items.length}`);
@@ -362,8 +359,6 @@
           </a>`).join('')}</div>`;
       }
     }
-
-    html += todaySections();
 
     const rumours = (ed.rumour_watch || []).map((r) => ({ ...r, s: byId.get(r.story_id) })).filter((r) => r.s);
     if (rumours.length) {
@@ -411,26 +406,76 @@
       html += sectionHead('Earlier briefings');
       html += `<div class="editions">${eds.map((e, i) => `<button class="chip ${i === state.edition ? 'on' : ''}" data-edition="${i}">${esc(e.edition)} · ${esc(londonDay(e.generated, { weekday: 'short', day: 'numeric' }))}</button>`).join('')}</div>`;
     }
-    html += `${customiseBtn}<p class="next">Next briefing ${esc(nextUpdateLabel())} London time.</p>
-      <p class="disclaimer">Written by AI from the day’s headlines. It can make mistakes. Not financial advice.</p>`;
+    html += todayFoot();
     $('#todayBody').innerHTML = html;
   }
 
-  // Today without Tech: the first section you picked leads, the rest follow.
-  function renderTodayNoTech(topics) {
-    const secs = briefing.sections || {};
-    const have = topics.filter((k) => secs[k]);
-    const first = have[0] ? secs[have[0]] : null;
-    const edition = (iso) => (Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Europe/London' }).format(new Date(iso))) < 12 ? 'Morning' : 'Evening');
-    $('#todayEyebrow').textContent = first ? `${edition(first.generated)} briefing · ${londonDay(first.generated, { weekday: 'long', day: 'numeric', month: 'long' })}` : londonDay(new Date().toISOString());
-    if (!first) {
-      $('#todayBody').innerHTML = empty('☀️', 'Your first briefing is on its way', `Briefings arrive at 7:30 and 17:00 London time. The next one is ${nextUpdateLabel()}.`) + customiseBtn;
+  // Today for Fashion, Finance or World: that section's briefing as a front page.
+  const MOVERS_LABEL = { Fashion: 'Brands to watch', Finance: 'Movers to watch', World: 'Market impact' };
+  function renderTodaySection(sec) {
+    const b = (briefing.sections || {})[sec];
+    const name = sec.toLowerCase();
+    const hour = (iso) => Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Europe/London' }).format(new Date(iso)));
+    const since = Date.now() - 30 * 3600e3;
+    const pool = stories.filter((s) => sectionOf(s) === sec && new Date(pubTime(s)).getTime() >= since).sort((x, y) => storyScore(y) - storyScore(x));
+    $('#todayEyebrow').textContent = b ? `${hour(b.generated) < 12 ? 'Morning' : 'Evening'} ${name} briefing · ${londonDay(b.generated, { weekday: 'long', day: 'numeric', month: 'long' })}` : londonDay(new Date().toISOString());
+
+    if (!b) {
+      $('#todayBody').innerHTML = (pool.length
+        ? `<p class="next" style="margin-top:0">Your first ${esc(name)} briefing arrives ${esc(nextUpdateLabel())}. Here are the biggest ${esc(name)} stories so far.</p>${pool.slice(0, 6).map((s, i) => topCard(s, i + 1, headline(s), s.summary)).join('')}`
+        : empty('☀️', `Your first ${name} briefing is on its way`, `Briefings arrive at 7:30 and 17:00 London time. The next one is ${nextUpdateLabel()}.`)) + todayFoot();
       return;
     }
-    $('#todayBody').innerHTML = `${sectionCover(have[0], first)}${todaySections(true)}${customiseBtn}
-      <p class="next">Next briefing ${esc(nextUpdateLabel())} London time.</p>
-      <p class="disclaimer">Written by AI from the day’s headlines. It can make mistakes. Not financial advice.</p>`;
+    const top = byId.get(b.lead_story_id) || pool.find((s) => imageOf(s));
+    const pts = (b.points || []).map((p) => ({ ...p, s: byId.get(p.story_id) }));
+    const used = new Set([top?.id, ...pts.map((p) => p.story_id)]);
+    const more = pool.filter((s) => !used.has(s.id)).slice(0, 6);
+
+    let html = `
+      <a class="cover sec-${esc(sec)}" href="#" ${top ? `data-story="${esc(top.id)}"` : ''}>
+        ${media(top)}
+        <div class="over">
+          <span class="edition">${hour(b.generated) < 12 ? '☀︎ Morning' : '☾ Evening'} ${esc(name)} briefing</span>
+          <h2>${esc(b.title)}</h2>
+          <div class="cmeta">${pool.length} stories reviewed · ${esc(londonTime(b.generated))}</div>
+        </div>
+      </a>
+      ${paras(b.summary)}`;
+
+    if (pts.length) {
+      html += sectionHead('Key stories', `${pts.length}`);
+      html += pts.slice(0, 2).map((p, i) => topCard(p.s, i + 1, p.s ? headline(p.s) : p.text, p.text)).join('');
+      const rest = pts.slice(2);
+      if (rest.length) html += `<div class="list">${rest.map((p, i) => `
+          <a class="t-row" href="#" ${p.s ? `data-story="${esc(p.s.id)}"` : ''}>
+            <span class="n">${i + 3}</span>
+            <div class="txt">${p.s ? sourceLine(p.s) : ''}<h3>${esc(p.s ? headline(p.s) : p.text)}</h3><p>${esc(p.text)}</p></div>
+            ${media(p.s)}
+          </a>`).join('')}</div>`;
+    }
+
+    if ((b.movers || []).length) {
+      html += sectionHead(MOVERS_LABEL[sec] || 'Movers to watch');
+      html += `<div class="stiles">${b.movers.map((k) => `
+        <button class="stile" data-ticker="${esc(k.ticker)}">
+          <div class="top">${logo(k.name, k.ticker)}<span class="arrow-badge ${esc(k.direction)}"><span class="${esc(k.direction)}">${ARROW[k.direction] || '◆'}</span></span></div>
+          <div><div class="tkn">${esc(k.ticker)}</div><div class="nm">${esc(k.name)}</div></div>
+          <p>${esc(k.note)}</p>
+        </button>`).join('')}</div>`;
+    }
+
+    if (more.length) {
+      html += sectionHead(`More in ${sec}`);
+      html += `<div class="list">${more.map((s) => `
+        <a class="brief-row" href="#" data-story="${esc(s.id)}">
+          <span class="b"></span>
+          <div class="txt">${esc(headline(s))}<small>${esc(lead(s).name)} · ${ago(pubTime(s))}</small></div>
+          ${chevron}
+        </a>`).join('')}</div>`;
+    }
+    $('#todayBody').innerHTML = html + todayFoot();
   }
+
 
   function topCard(s, n, title, summary) {
     return `<a class="t-card" href="#" ${s ? `data-story="${esc(s.id)}"` : ''}>
@@ -618,7 +663,7 @@
       <div class="chips wrap">${list.map((t) => `<button class="chip ${chosen.has(t) ? 'on' : ''}" data-interest="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>`).join('');
   };
   function renderSettings() {
-    $('#todayValue').textContent = todayList().join(', ');
+    $('#todayValue').textContent = todayTopic();
     const n = (interests || []).length;
     $('#interestValue').textContent = n ? `${n} chosen` : 'None yet';
     $('#updatedSettings').textContent = updated ? ago(updated) : '—';
@@ -888,7 +933,7 @@
       </section>`;
 
     const paras = String(s.story || '').split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
-    const fullStory = paras.length ? `<section class="prose-wrap">
+    const fullStory = false && paras.length ? `<section class="prose-wrap">
         <div class="kicker">📖 The full story</div>
         <div class="prose">${paras.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
         <p class="prose-note">Written by AI in its own words from ${n} source${n > 1 ? 's' : ''}. For the publisher’s original article, tap the button below.</p>
@@ -941,7 +986,7 @@
       </div>
       ${summaryCard}${fullStory}${odds}${stocks}${sources}
       ${upNext(s, seq)}
-      <p class="disclaimer">Summary, write-up, odds and market effects are AI-generated and can be wrong. Not financial advice.</p>`;
+      <p class="disclaimer">Summary, odds and market effects are AI-generated and can be wrong. Not financial advice.</p>`;
 
     return {
       title: l.name || 'Story', backLabel, html, clearBar: hasImg,
@@ -1100,21 +1145,19 @@
       <button class="cell pick" data-today="${k}">
         <span class="pick-ic sec-${k}">${ic}</span>
         <span class="pick-txt"><b>${esc(l)}</b><small>${esc(d)}</small></span>
-        <span class="check ${todayList().includes(k) ? 'on' : ''}"></span>
+        <span class="check ${todayTopic() === k ? 'on' : ''}"></span>
       </button>`).join('');
     const page = pushPage({ title: 'Today', backLabel: 'Settings', html: `
       <div class="pref-page">
         <h1 class="pref-title">On Today</h1>
-        <p class="pref-sub">Choose what your morning and evening briefing covers. Tech comes with Rumour watch and Stocks to watch.</p>
+        <p class="pref-sub">Choose the topic of your morning and evening briefing. Tech comes with Rumour watch and Stocks to watch.</p>
         <div class="group">${cells()}</div>
       </div>` });
     page.addEventListener('click', (e) => {
       const b = e.target.closest('[data-today]'); if (!b) return;
-      const set = new Set(todayList());
-      if (set.has(b.dataset.today)) { if (set.size === 1) { toast('Keep at least one'); return; } set.delete(b.dataset.today); } else set.add(b.dataset.today);
-      todayTopics = TODAY_OPTIONS.map(([k]) => k).filter((k) => set.has(k));
+      todayTopics = [b.dataset.today];
       store.set('rr.todayTopics', todayTopics);
-      $$('[data-today]', page).forEach((x) => $('.check', x).classList.toggle('on', set.has(x.dataset.today)));
+      $$('[data-today]', page).forEach((x) => $('.check', x).classList.toggle('on', x === b));
       state.edition = 0; renderToday(); renderSettings();
     });
   }
@@ -1145,25 +1188,20 @@
   // First open: what do you want on Today?
   let todayPick = null;
   function showTodayAsk() {
-    todayPick = new Set(todayTopics || ['Tech']);
+    todayPick = todayTopic();
     const draw = () => {
       $('#todayTiles').innerHTML = TODAY_OPTIONS.map(([k, l, d, ic]) => `
-        <button class="tile sec-${k} ${todayPick.has(k) ? 'on' : ''}" data-pick="${k}">
-          <span class="tile-ic">${ic}</span><b>${esc(l)}</b><small>${esc(d)}</small><span class="check ${todayPick.has(k) ? 'on' : ''}"></span>
+        <button class="tile sec-${k} ${todayPick === k ? 'on' : ''}" data-pick="${k}" role="radio" aria-checked="${todayPick === k}">
+          <span class="tile-ic">${ic}</span><b>${esc(l)}</b><small>${esc(d)}</small><span class="check ${todayPick === k ? 'on' : ''}"></span>
         </button>`).join('');
-      $('#todayDone').disabled = !todayPick.size;
     };
     draw();
-    $('#todayTiles').onclick = (e) => {
-      const b = e.target.closest('[data-pick]'); if (!b) return;
-      todayPick.has(b.dataset.pick) ? todayPick.delete(b.dataset.pick) : todayPick.add(b.dataset.pick);
-      draw();
-    };
+    $('#todayTiles').onclick = (e) => { const b = e.target.closest('[data-pick]'); if (b) { todayPick = b.dataset.pick; draw(); } };
     $('#todayAsk').showModal();
   }
   $('#todayDone').addEventListener('click', () => $('#todayAsk').close());
   $('#todayAsk').addEventListener('close', () => {
-    todayTopics = TODAY_OPTIONS.map(([k]) => k).filter((k) => (todayPick?.size ? todayPick : new Set(['Tech'])).has(k));
+    todayTopics = [todayPick || 'Tech'];
     store.set('rr.todayTopics', todayTopics);
     state.edition = 0; renderToday(); renderSettings();
   });

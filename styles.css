@@ -823,3 +823,5 @@ dialog.sheet[open] { animation: sheetUp .4s cubic-bezier(.2,.8,.2,1); }
 
 .customise { display: block; margin: 26px auto 0; padding: 10px 18px; border-radius: 999px; background: var(--surface); color: var(--tint); font-weight: 600; font-size: 15px; }
 .tile:focus, .tile:focus-visible { outline: none; }
+.intro + .intro { margin-top: 12px; }
+.intro + .intro::first-letter { float: none; font-size: inherit; line-height: inherit; font-weight: inherit; padding: 0; color: inherit; }
