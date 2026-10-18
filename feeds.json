@@ -81,5 +81,19 @@
   {"name": "The Telegraph World", "section": "World", "url": "https://www.telegraph.co.uk/news/world/rss.xml"},
   {"name": "Google News: world", "section": "World", "url": "https://news.google.com/rss/headlines/section/topic/WORLD?hl=en-GB&gl=GB&ceid=GB:en"},
   {"name": "Google News: top stories", "section": "World", "url": "https://news.google.com/rss?hl=en-GB&gl=GB&ceid=GB:en"},
-  {"name": "Reuters World (via Google News)", "section": "World", "url": "https://news.google.com/rss/search?q=site:reuters.com+world+when:1d&hl=en-GB&gl=GB&ceid=GB:en"}
+  {"name": "Reuters World (via Google News)", "section": "World", "url": "https://news.google.com/rss/search?q=site:reuters.com+world+when:1d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "WWD", "section": "Fashion", "url": "https://wwd.com/feed/"},
+  {"name": "Business of Fashion (via Google News)", "section": "Fashion", "url": "https://news.google.com/rss/search?q=site:businessoffashion.com+when:2d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "FT Fashion (via Google News)", "section": "Fashion", "url": "https://news.google.com/rss/search?q=site:ft.com+(fashion+OR+luxury+OR+LVMH+OR+Kering+OR+Burberry+OR+Gucci+OR+Chanel)+when:2d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Vogue", "section": "Fashion", "url": "https://www.vogue.com/feed/rss"},
+  {"name": "British Vogue", "section": "Fashion", "url": "https://www.vogue.co.uk/feed/rss"},
+  {"name": "Vogue Business (via Google News)", "section": "Fashion", "url": "https://news.google.com/rss/search?q=site:voguebusiness.com+when:2d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Telegraph Fashion", "section": "Fashion", "url": "https://www.telegraph.co.uk/fashion/rss.xml"},
+  {"name": "Telegraph Fashion (via Google News)", "section": "Fashion", "url": "https://news.google.com/rss/search?q=site:telegraph.co.uk/fashion+when:2d&hl=en-GB&gl=GB&ceid=GB:en"},
+  {"name": "Guardian Fashion", "section": "Fashion", "url": "https://www.theguardian.com/fashion/rss"},
+  {"name": "Harper's Bazaar", "section": "Fashion", "url": "https://www.harpersbazaar.com/rss/all.xml/"},
+  {"name": "Fashionista", "section": "Fashion", "url": "https://fashionista.com/.rss/full/"},
+  {"name": "Highsnobiety", "section": "Fashion", "url": "https://www.highsnobiety.com/feed/"},
+  {"name": "Hypebeast", "section": "Fashion", "url": "https://hypebeast.com/feed"},
+  {"name": "Google News: fashion & luxury", "section": "Fashion", "url": "https://news.google.com/rss/search?q=(fashion+OR+luxury)+(LVMH+OR+Kering+OR+Herm%C3%A8s+OR+Chanel+OR+Prada+OR+Burberry+OR+Richemont+OR+Zara+OR+Inditex+OR+%22fashion+week%22)+when:2d&hl=en-GB&gl=GB&ceid=GB:en"}
 ]

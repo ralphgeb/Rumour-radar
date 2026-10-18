@@ -2,16 +2,25 @@
   'use strict';
 
   // ---------- constants ----------
-  const TOPICS = [
-    'AI', 'Apple', 'Google', 'Microsoft', 'Amazon', 'Meta', 'Nvidia', 'Tesla & EVs',
-    'Chips', 'Phones & Gadgets', 'Computers', 'Gaming', 'Software & Apps', 'Cybersecurity',
-    'Streaming & Media', 'Social media', 'Startups & VC', 'Crypto', 'Markets & Economy',
-    'Banks & Finance', 'Deals & Mergers', 'Policy & Regulation', 'Energy', 'Cars', 'Space',
-    'Science', 'Health & Biotech', 'Retail', 'Telecoms', 'UK business',
-    'World politics', 'Conflict & security', 'Elections', 'Trade & tariffs', 'Central banks',
-    'Commodities', 'Climate'
+  // Interests, grouped the way they appear in Settings → News interests.
+  const TOPIC_GROUPS = [
+    ['Tech', ['AI', 'Apple', 'Google', 'Microsoft', 'Amazon', 'Meta', 'Nvidia', 'Tesla & EVs',
+      'Chips', 'Phones & Gadgets', 'Computers', 'Gaming', 'Software & Apps', 'Cybersecurity',
+      'Streaming & Media', 'Social media', 'Startups & VC', 'Telecoms', 'Space', 'Science']],
+    ['Fashion', ['Fashion & Luxury', 'Designers & Shows', 'Beauty', 'Retail']],
+    ['Finance', ['Markets & Economy', 'Banks & Finance', 'Deals & Mergers', 'Crypto', 'Central banks',
+      'Commodities', 'Energy', 'Cars', 'Health & Biotech', 'UK business']],
+    ['World', ['World politics', 'Conflict & security', 'Elections', 'Trade & tariffs', 'Policy & Regulation', 'Climate']]
   ];
-  const SECTIONS = [['all', 'All'], ['foryou', 'For You'], ['Tech', 'Tech'], ['Finance', 'Finance'], ['World', 'World'], ['rumours', 'Rumours']];
+  const TOPICS = TOPIC_GROUPS.flatMap(([, list]) => list);
+  const SECTIONS = [['all', 'All'], ['foryou', 'For You'], ['Tech', 'Tech'], ['Finance', 'Finance'], ['World', 'World'], ['Fashion', 'Fashion'], ['rumours', 'Rumours']];
+  // What can go on the Today page.
+  const TODAY_OPTIONS = [
+    ['Tech', 'Tech', 'Gadgets, AI, big tech and startups', '⚡︎'],
+    ['Fashion', 'Fashion', 'Designers, shows, luxury and beauty', '✦'],
+    ['Finance', 'Finance', 'Markets, companies and the economy', '▲'],
+    ['World', 'World', 'The big stories around the world', '◉']
+  ];
   const IMPACT = { none: 0, low: 1, medium: 2, high: 3 };
   const ARROW = { up: '▲', down: '▼', mixed: '◆' };
   const PAGE_SIZE = 40;
@@ -66,7 +75,7 @@
   // story accessors (older stories may be missing newer fields)
   const headline = (s) => s.headline || s.sources?.[0]?.title || s.claim || '';
   const imageOf = (s) => safeUrl(s.image) || safeUrl((s.sources || []).find((x) => safeUrl(x.image))?.image);
-  const sectionOf = (s) => (/^(markets|finance)$/i.test(s.section || '') ? 'Finance' : /^world$/i.test(s.section || '') ? 'World' : 'Tech');
+  const sectionOf = (s) => (/^(markets|finance)$/i.test(s.section || '') ? 'Finance' : /^world$/i.test(s.section || '') ? 'World' : /^fashion$/i.test(s.section || '') ? 'Fashion' : 'Tech');
   const pubTime = (s) => s.first_published || s.first_seen || s.last_updated || '';
   const updTime = (s) => s.last_updated || s.first_seen || '';
   const lead = (s) => s.sources?.[0] || { name: '', link: '' };
@@ -115,6 +124,8 @@
   let lastRun = null;
   let sourceCount = 0;
   let interests = store.get('rr.interests', null);
+  let todayTopics = store.get('rr.todayTopics', null); // null until you've been asked
+  const todayList = () => TODAY_OPTIONS.map(([k]) => k).filter((k) => (todayTopics || ['Tech']).includes(k));
   const state = {
     tab: 'today',
     edition: 0,
@@ -291,17 +302,29 @@
     return (s.sources?.length || 1) * 2 + (IMPACT[s.overall_impact] || 0) * 2 + (imageOf(s) ? 1 : 0);
   }
 
+  // The other sections you picked for Today, each as its "today" cover.
+  function todaySections(skipFirst) {
+    const secs = briefing.sections || {};
+    let list = todayList().filter((k) => k !== 'Tech' && secs[k]);
+    if (skipFirst) list = list.slice(1);
+    return list.map((k) => sectionHead(k, `Updated ${londonTime(secs[k].generated)}`) + sectionCover(k, secs[k])).join('');
+  }
+  const customiseBtn = `<button class="customise" data-today-topics>Choose what’s on Today</button>`;
+
   function renderToday() {
+    const topics = todayList();
+    if (!topics.includes('Tech')) { renderTodayNoTech(topics); return; }
+    const onlyTech = topics.length === 1;
     const eds = briefing.editions || [];
     const ed = eds[state.edition] || eds[0];
-    $('#todayEyebrow').textContent = ed ? `${ed.edition} tech briefing · ${londonDay(ed.generated, { weekday: 'long', day: 'numeric', month: 'long' })}` : londonDay(new Date().toISOString());
+    $('#todayEyebrow').textContent = ed ? `${ed.edition} ${onlyTech ? 'tech ' : ''}briefing · ${londonDay(ed.generated, { weekday: 'long', day: 'numeric', month: 'long' })}` : londonDay(new Date().toISOString());
 
     if (!ed) {
       // No briefing written yet: show the biggest stories so far.
       if (!stories.length) { $('#todayBody').innerHTML = empty('☀️', 'Your first briefing is on its way', `Briefings arrive at 7:30 and 17:00 London time. The next one is ${nextUpdateLabel()}.`); return; }
       const top = stories.filter((s) => sectionOf(s) === 'Tech').sort((a, b) => storyScore(b) - storyScore(a)).slice(0, 6);
       $('#todayBody').innerHTML = `<p class="next" style="margin-top:0">Your first full tech briefing arrives ${esc(nextUpdateLabel())}. Here are the biggest tech stories so far.</p>
-        ${top.map((s, i) => topCard(s, i + 1, headline(s), s.summary)).join('')}`;
+        ${top.map((s, i) => topCard(s, i + 1, headline(s), s.summary)).join('')}${todaySections()}${customiseBtn}`;
       return;
     }
 
@@ -339,6 +362,8 @@
           </a>`).join('')}</div>`;
       }
     }
+
+    html += todaySections();
 
     const rumours = (ed.rumour_watch || []).map((r) => ({ ...r, s: byId.get(r.story_id) })).filter((r) => r.s);
     if (rumours.length) {
@@ -386,9 +411,25 @@
       html += sectionHead('Earlier briefings');
       html += `<div class="editions">${eds.map((e, i) => `<button class="chip ${i === state.edition ? 'on' : ''}" data-edition="${i}">${esc(e.edition)} · ${esc(londonDay(e.generated, { weekday: 'short', day: 'numeric' }))}</button>`).join('')}</div>`;
     }
-    html += `<p class="next">Next briefing ${esc(nextUpdateLabel())} London time.</p>
+    html += `${customiseBtn}<p class="next">Next briefing ${esc(nextUpdateLabel())} London time.</p>
       <p class="disclaimer">Written by AI from the day’s headlines. It can make mistakes. Not financial advice.</p>`;
     $('#todayBody').innerHTML = html;
+  }
+
+  // Today without Tech: the first section you picked leads, the rest follow.
+  function renderTodayNoTech(topics) {
+    const secs = briefing.sections || {};
+    const have = topics.filter((k) => secs[k]);
+    const first = have[0] ? secs[have[0]] : null;
+    const edition = (iso) => (Number(new Intl.DateTimeFormat('en-GB', { hour: 'numeric', hourCycle: 'h23', timeZone: 'Europe/London' }).format(new Date(iso))) < 12 ? 'Morning' : 'Evening');
+    $('#todayEyebrow').textContent = first ? `${edition(first.generated)} briefing · ${londonDay(first.generated, { weekday: 'long', day: 'numeric', month: 'long' })}` : londonDay(new Date().toISOString());
+    if (!first) {
+      $('#todayBody').innerHTML = empty('☀️', 'Your first briefing is on its way', `Briefings arrive at 7:30 and 17:00 London time. The next one is ${nextUpdateLabel()}.`) + customiseBtn;
+      return;
+    }
+    $('#todayBody').innerHTML = `${sectionCover(have[0], first)}${todaySections(true)}${customiseBtn}
+      <p class="next">Next briefing ${esc(nextUpdateLabel())} London time.</p>
+      <p class="disclaimer">Written by AI from the day’s headlines. It can make mistakes. Not financial advice.</p>`;
   }
 
   function topCard(s, n, title, summary) {
@@ -438,7 +479,7 @@
     </a>`;
   }
 
-  const SECTION_LABEL = { Tech: 'Tech today', Finance: 'Markets today', World: 'World today' };
+  const SECTION_LABEL = { Tech: 'Tech today', Finance: 'Markets today', World: 'World today', Fashion: 'Fashion today' };
   function sectionCover(sec, b) {
     const lead = byId.get(b.lead_story_id);
     const pts = (b.points || []).map((p) => ({ ...p, s: byId.get(p.story_id) }));
@@ -456,7 +497,7 @@
           <a class="sec-point" href="#" ${p.s ? `data-story="${esc(p.s.id)}"` : ''}>
             <span class="b"></span><span class="t">${esc(p.text)}</span>${p.s ? chevron : ''}
           </a>`).join('')}</div>` : ''}
-        ${(b.movers || []).length ? `<div class="movers-label">${sec === 'World' ? 'Market impact' : 'Movers to watch'}</div>
+        ${(b.movers || []).length ? `<div class="movers-label">${sec === 'World' ? 'Market impact' : sec === 'Fashion' ? 'Brands to watch' : 'Movers to watch'}</div>
           <div class="movers">${b.movers.map((m) => `
             <button class="mover" data-ticker="${esc(m.ticker)}" title="${esc(m.note)}">
               <span class="mt"><span class="${esc(m.direction)}">${ARROW[m.direction] || '◆'}</span> ${esc(m.ticker)}</span>
@@ -480,11 +521,11 @@
     const all = newsItems();
     if (!stories.length) { $('#newsList').innerHTML = empty('📰', 'No stories yet', `The first update runs ${nextUpdateLabel()}, or tap refresh.`); return; }
     if (!all.length) {
-      $('#newsList').innerHTML = empty('🔍', 'Nothing here yet', state.section === 'foryou' ? 'Pick more interests in Settings, or try “All”.' : 'Try another section.');
+      $('#newsList').innerHTML = empty('🔍', 'Nothing here yet', state.section === 'foryou' ? 'Pick more interests in Settings → News interests, or try “All”.' : 'Try another section.');
       return;
     }
     const items = all.slice(0, state.newsLimit);
-    const brief = ['Tech', 'Finance', 'World'].includes(state.section) ? (briefing.sections || {})[state.section] : null;
+    const brief = ['Tech', 'Finance', 'World', 'Fashion'].includes(state.section) ? (briefing.sections || {})[state.section] : null;
     let html;
     let rest;
     if (brief) {
@@ -571,9 +612,15 @@
   const sentWord = { up: 'Bullish', down: 'Bearish', mixed: 'Mixed' };
 
   // ---------- SETTINGS ----------
-  function renderSettings() {
+  const groupedChips = () => {
     const chosen = new Set(interests || []);
-    $('#interestChips').innerHTML = TOPICS.map((t) => `<button class="chip ${chosen.has(t) ? 'on' : ''}" data-interest="${esc(t)}">${esc(t)}</button>`).join('');
+    return TOPIC_GROUPS.map(([sec, list]) => `<div class="int-group"><div class="int-label">${esc(sec)}</div>
+      <div class="chips wrap">${list.map((t) => `<button class="chip ${chosen.has(t) ? 'on' : ''}" data-interest="${esc(t)}">${esc(t)}</button>`).join('')}</div></div>`).join('');
+  };
+  function renderSettings() {
+    $('#todayValue').textContent = todayList().join(', ');
+    const n = (interests || []).length;
+    $('#interestValue').textContent = n ? `${n} chosen` : 'None yet';
     $('#updatedSettings').textContent = updated ? ago(updated) : '—';
     $('#storyCount').textContent = stories.length || '—';
     $('#sourceCount').textContent = sourceCount || '—';
@@ -958,6 +1005,7 @@
     $('#navbarTitle').textContent = $(`.view[data-view="${tab}"]`).dataset.title;
     window.scrollTo(0, scrollMemory[tab] || 0);
     window.RR?.onTab?.(tab);
+    if (tab === 'news' && !store.get('rr.newsAsked', false) && !$('#todayAsk').open) setTimeout(showWelcome, 250);
     renderBadge();
     onScroll();
   }
@@ -970,7 +1018,7 @@
     const ptr = $('#ptr');
     let startY = null, dy = 0;
     window.addEventListener('touchstart', (e) => {
-      if (pages.length || refreshing || window.scrollY > 0 || $('#welcome').open) return;
+      if (pages.length || refreshing || window.scrollY > 0 || $('#welcome').open || $('#todayAsk').open) return;
       startY = e.touches[0].clientY; dy = 0;
     }, { passive: true });
     window.addEventListener('touchmove', (e) => {
@@ -1033,10 +1081,46 @@
     store.set('rr.interests', interests);
     chipEl.classList.toggle('on', set.has(t));
   }
-  $('#interestChips').addEventListener('click', (e) => {
-    const b = e.target.closest('[data-interest]'); if (!b) return;
-    toggleInterest(b.dataset.interest, b); renderNews();
-  });
+  // Settings → News interests (its own page, so Settings stays tidy)
+  function openInterests() {
+    const page = pushPage({ title: 'News interests', backLabel: 'Settings', html: `
+      <div class="pref-page">
+        <h1 class="pref-title">News interests</h1>
+        <p class="pref-sub">Tap the topics you like. Stories about them appear under <b>For You</b> in News.</p>
+        ${groupedChips()}
+      </div>` });
+    page.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-interest]'); if (!b) return;
+      toggleInterest(b.dataset.interest, b); renderNews(); renderSettings();
+    });
+  }
+  // Settings → Today
+  function openTodayPrefs() {
+    const cells = () => TODAY_OPTIONS.map(([k, l, d, ic]) => `
+      <button class="cell pick" data-today="${k}">
+        <span class="pick-ic sec-${k}">${ic}</span>
+        <span class="pick-txt"><b>${esc(l)}</b><small>${esc(d)}</small></span>
+        <span class="check ${todayList().includes(k) ? 'on' : ''}"></span>
+      </button>`).join('');
+    const page = pushPage({ title: 'Today', backLabel: 'Settings', html: `
+      <div class="pref-page">
+        <h1 class="pref-title">On Today</h1>
+        <p class="pref-sub">Choose what your morning and evening briefing covers. Tech comes with Rumour watch and Stocks to watch.</p>
+        <div class="group">${cells()}</div>
+      </div>` });
+    page.addEventListener('click', (e) => {
+      const b = e.target.closest('[data-today]'); if (!b) return;
+      const set = new Set(todayList());
+      if (set.has(b.dataset.today)) { if (set.size === 1) { toast('Keep at least one'); return; } set.delete(b.dataset.today); } else set.add(b.dataset.today);
+      todayTopics = TODAY_OPTIONS.map(([k]) => k).filter((k) => set.has(k));
+      store.set('rr.todayTopics', todayTopics);
+      $$('[data-today]', page).forEach((x) => $('.check', x).classList.toggle('on', set.has(x.dataset.today)));
+      state.edition = 0; renderToday(); renderSettings();
+    });
+  }
+  $('#interestCell').addEventListener('click', openInterests);
+  $('#todayBody').addEventListener('click', (e) => { if (e.target.closest('[data-today-topics]')) showTodayAsk(); });
+  $('#todayCell').addEventListener('click', openTodayPrefs);
 
   $('#tokenSave').addEventListener('click', async () => {
     const v = $('#tokenInput').value.trim();
@@ -1058,10 +1142,35 @@
     location.reload();
   });
 
-  // welcome sheet
+  // First open: what do you want on Today?
+  let todayPick = null;
+  function showTodayAsk() {
+    todayPick = new Set(todayTopics || ['Tech']);
+    const draw = () => {
+      $('#todayTiles').innerHTML = TODAY_OPTIONS.map(([k, l, d, ic]) => `
+        <button class="tile sec-${k} ${todayPick.has(k) ? 'on' : ''}" data-pick="${k}">
+          <span class="tile-ic">${ic}</span><b>${esc(l)}</b><small>${esc(d)}</small><span class="check ${todayPick.has(k) ? 'on' : ''}"></span>
+        </button>`).join('');
+      $('#todayDone').disabled = !todayPick.size;
+    };
+    draw();
+    $('#todayTiles').onclick = (e) => {
+      const b = e.target.closest('[data-pick]'); if (!b) return;
+      todayPick.has(b.dataset.pick) ? todayPick.delete(b.dataset.pick) : todayPick.add(b.dataset.pick);
+      draw();
+    };
+    $('#todayAsk').showModal();
+  }
+  $('#todayDone').addEventListener('click', () => $('#todayAsk').close());
+  $('#todayAsk').addEventListener('close', () => {
+    todayTopics = TODAY_OPTIONS.map(([k]) => k).filter((k) => (todayPick?.size ? todayPick : new Set(['Tech'])).has(k));
+    store.set('rr.todayTopics', todayTopics);
+    state.edition = 0; renderToday(); renderSettings();
+  });
+
+  // First visit to News: pick your interests.
   function showWelcome() {
-    const chosen = new Set(interests || []);
-    $('#welcomeChips').innerHTML = TOPICS.map((t) => `<button class="chip ${chosen.has(t) ? 'on' : ''}" data-interest="${esc(t)}">${esc(t)}</button>`).join('');
+    $('#welcomeChips').innerHTML = groupedChips();
     $('#welcome').showModal();
   }
   $('#welcomeChips').addEventListener('click', (e) => {
@@ -1070,6 +1179,8 @@
   $('#welcomeDone').addEventListener('click', () => $('#welcome').close());
   $('#welcome').addEventListener('close', () => {
     if (interests === null) { interests = []; store.set('rr.interests', interests); }
+    store.set('rr.newsAsked', true);
+    if ((interests || []).length && state.section === 'all') { state.section = 'foryou'; store.set('rr.section', 'foryou'); }
     renderAll();
   });
 
@@ -1096,5 +1207,5 @@
   applyTheme();
   renderAll();
   load();
-  if (interests === null) setTimeout(showWelcome, 400);
+  if (todayTopics === null) setTimeout(showTodayAsk, 400);
 })();

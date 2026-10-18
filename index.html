@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Rumour Radar</title>
-  <meta name="description" content="Twice-daily tech briefing plus Tech, Finance and World news, rumour odds, and the stocks each story could move.">
+  <meta name="description" content="Twice-daily briefing plus Tech, Finance, World and Fashion news, rumour odds, and the stocks each story could move.">
   <meta name="theme-color" content="#f2f2f7" id="themeColor">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="mobile-web-app-capable" content="yes">
@@ -142,11 +142,12 @@
       </div>
       <div class="group-footer">Live from TfL every time you open the app, and every 5 minutes while it’s open.</div>
 
-      <div class="group-header">Your interests</div>
+      <div class="group-header">Personalise</div>
       <div class="group">
-        <div class="cell cell-chips"><div class="chips wrap" id="interestChips"></div></div>
+        <button class="cell nav" id="todayCell"><span>Today</span><span class="value" id="todayValue">Tech</span><svg class="chev" viewBox="0 0 8 14" width="8" height="14"><path d="M1 1l6 6-6 6"/></svg></button>
+        <button class="cell nav" id="interestCell"><span>News interests</span><span class="value" id="interestValue">—</span><svg class="chev" viewBox="0 0 8 14" width="8" height="14"><path d="M1 1l6 6-6 6"/></svg></button>
       </div>
-      <div class="group-footer">Stories about these topics appear under “For You”.</div>
+      <div class="group-footer">Choose what your Today briefing covers, and the topics shown under “For You” in News.</div>
 
       <div class="group-header">Live refresh</div>
       <div class="group">
@@ -183,7 +184,7 @@
       <div class="group-header">How it works</div>
       <div class="group">
         <div class="cell text">
-          At 7:30 and 17:00 (London time) the app reads more than 60 tech, finance and world news sites. A quick first pass drops junk and groups the same story from different outlets. Then an AI reads each story and writes a summary, key points and a full write-up in its own words. It flags rumours (including market-moving world news) with odds of being true, lists stocks the story could move, and writes the Today tech briefing.
+          At 7:30 and 17:00 (London time) the app reads about 100 tech, finance, world and fashion news sites. A quick first pass drops junk and groups the same story from different outlets. Then an AI reads each story and writes a summary, key points and a full write-up in its own words. It flags rumours (including market-moving world news) with odds of being true, lists stocks the story could move, and writes the Today tech briefing.
         </div>
       </div>
       <div class="group-footer">Write-ups, odds and stock effects are AI-generated and can be wrong. Not financial advice. Always check the original article.</div>
@@ -227,16 +228,26 @@
     </div>
   </dialog>
 
-  <!-- Welcome sheet -->
-  <dialog class="sheet" id="welcome">
+  <!-- First open: what goes on Today -->
+  <dialog class="sheet" id="todayAsk">
     <div class="sheet-grabber"></div>
     <div class="sheet-body">
       <img src="icons/icon-192.png" alt="" class="welcome-icon">
-      <h2>Welcome to Rumour Radar</h2>
-      <p class="secondary">A morning and evening tech briefing, plus Tech, Finance and World news written up in full, AI odds on rumours, and the stocks each story could move.</p>
-      <p class="label">Pick what you’re into</p>
-      <div class="chips wrap center" id="welcomeChips"></div>
-      <button class="btn-primary" id="welcomeDone">Continue</button>
+      <h2>What do you want on Today?</h2>
+      <p class="secondary">Your briefing arrives at 7:30 and 17:00. Pick one or more. You can change this any time in Settings.</p>
+      <div class="tiles" id="todayTiles"></div>
+      <button class="btn-primary" id="todayDone">Continue</button>
+    </div>
+  </dialog>
+
+  <!-- First visit to News: interests -->
+  <dialog class="sheet" id="welcome">
+    <div class="sheet-grabber"></div>
+    <div class="sheet-body">
+      <h2>Tailor your news</h2>
+      <p class="secondary">Tap the topics you like. They appear under “For You”. Change them any time in Settings → News interests.</p>
+      <div class="int-groups" id="welcomeChips"></div>
+      <button class="btn-primary" id="welcomeDone">Done</button>
     </div>
   </dialog>
 
