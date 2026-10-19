@@ -41,7 +41,7 @@ const SECTION_SHARE = { Tech: 0.25, Finance: 0.25, World: 0.25, Fashion: 0.25 };
 const BLOCKED = /cnbc/i;
 const FASHION_OUTLETS = /WWD|Business of Fashion|Vogue|Harper's Bazaar|Fashionista|Highsnobiety|Hypebeast|Telegraph Fashion|Guardian Fashion/i;
 
-import { parseFeed, findMetaImage, stripHtml } from './feed-parser.mjs';
+import { parseFeed, findMetaImage, findPublished, stripHtml } from './feed-parser.mjs';
 import { updateStocks, validSymbol } from './stocks.mjs';
 import { vapidKeys, ensurePublicKey, saveFromApp, sendMorning } from './push.mjs';
 import { execFile } from 'node:child_process';
@@ -157,6 +157,15 @@ export async function collect(feeds, seen) {
   return [...unique.values()].sort((a, b) => b.published.localeCompare(a.published));
 }
 
+// Articles whose page says they were published long before the feed claims.
+const STALE_DAYS = 3;
+function isStale(a) {
+  if (!a.pagePublished) return false;
+  const page = Date.parse(a.pagePublished);
+  const limit = (a.section === 'Fashion' ? FASHION_AGE_H / 24 + 1 : STALE_DAYS) * 864e5;
+  return Date.now() - page > limit;
+}
+
 // ---------- 2. Read each article (text for the AI + preview picture) ----------
 export function extractText(html) {
   let h = html.replace(/<(script|style|noscript|svg|iframe|form|nav|header|footer|aside|figcaption|button)\b[\s\S]*?<\/\1>/gi, ' ');
@@ -237,7 +246,7 @@ async function fetchArticle(url) {
       html += decoder.decode(value, { stream: true });
     }
     reader.cancel().catch(() => {});
-    return { text: extractText(html), image: findMetaImage(html, res.url || url), url };
+    return { text: extractText(html), image: findMetaImage(html, res.url || url), url, published: findPublished(html) };
   } catch { return { text: '', image: '', url }; } finally { clearTimeout(t); }
 }
 
@@ -246,8 +255,9 @@ export async function readArticles(articles) {
   let withText = 0;
   for (let i = 0; i < articles.length; i += 8) {
     await Promise.all(articles.slice(i, i + 8).map(async (a) => {
-      const { text, image, url } = await fetchArticle(a.link);
-      if (url && url !== a.link && !/news\.google\.com/.test(url)) a.link = url; // keep the publisher's own address
+      const { text, image, url, published } = await fetchArticle(a.link);
+      if (url && url !== a.link && !/news\.google\.com/.test(url)) { a.feedLink = a.link; a.link = url; } // keep the publisher's own address
+      if (published) a.pagePublished = published;
       a.text = text;
       if (!a.image && image) a.image = image;
       if (text) withText++;
@@ -447,7 +457,7 @@ export async function analyseBatch(batch, existing, apiKey) {
     tool_choice: { type: 'tool', name: 'record_analysis' },
     messages: [{
       role: 'user',
-      content: `Existing stories from the last few days (id | status | outlets | claim):\n${existingList}\n\nNew articles to analyse:\n\n${articles}`
+      content: `Today is ${new Date().toUTCString().slice(0, 16)}. If an article is clearly an old story being recirculated (the events happened weeks or months ago), set keep to false.\n\nExisting stories from the last few days (id | status | outlets | claim):\n${existingList}\n\nNew articles to analyse:\n\n${articles}`
     }]
   }, apiKey);
   if (!Array.isArray(input.analyses)) throw new Error('AI returned no analysis');
@@ -1221,6 +1231,22 @@ export async function main() {
     news.fashion_v2 = 1;
     log(`Fashion clean-up: removed ${before - news.stories.length} off-topic stories.`);
   }
+  // Check the page date of stories already in the app (once each): drop re-dated old ones.
+  if ((process.env.MODE || 'full').toLowerCase() === 'full') {
+    const unchecked = news.stories.filter((x) => !x.date_checked).slice(0, 400);
+    let dropped = 0;
+    for (const part of chunk(unchecked, 10)) {
+      await Promise.all(part.map(async (st) => {
+        st.date_checked = 1;
+        const link = (st.sources || []).map((x) => x.link).find((l) => l && !/news\.google\.com/.test(l));
+        if (!link) return;
+        const a = await fetchArticle(link);
+        if (a.published && isStale({ pagePublished: a.published, section: normSection(st.section) })) { st._stale = true; dropped++; }
+      }));
+    }
+    news.stories = news.stories.filter((x) => !x._stale);
+    if (unchecked.length) log(`Checked the page dates of ${unchecked.length} stories; removed ${dropped} old ones.`);
+  }
   // Once: give fashion articles skipped by older versions a second chance.
   if (!news.fashion_reset) {
     const before = seen.length;
@@ -1281,9 +1307,17 @@ export async function main() {
   log(`${fresh.length} new articles found; checking ${pool.length} headlines.`);
   const done = [];
   const groups = await triageAll(pool, news.stories, apiKey, done);
-  const todo = pickFair(groups, MAX_NEW_PER_RUN);
+  let todo = pickFair(groups, MAX_NEW_PER_RUN);
   if (groups.length > todo.length) log(`${groups.length - todo.length} stories left for the next run.`);
   await readArticles(todo.map((g) => g.art));
+  // Old articles with a new date: Google News and some sites re-date old pieces,
+  // so trust the date printed on the article page itself.
+  const stale = todo.filter((g) => isStale(g.art));
+  if (stale.length) {
+    for (const g of stale) done.push(g.art.link, g.art.feedLink, ...g.extras.map((x) => x.link));
+    todo = todo.filter((g) => !stale.includes(g));
+    log(`Skipped ${stale.length} old article(s) re-dated as new: ${stale.slice(0, 5).map((g) => g.art.title.slice(0, 50)).join(' | ')}`);
+  }
 
   const stats = { added: 0, merged: 0, dropped: 0 };
   await runParallel(chunk(todo, BATCH_SIZE), PARALLEL, async (batch) => {
@@ -1296,7 +1330,7 @@ export async function main() {
       const byId = new Map(news.stories.map((s) => [s.id, s]));
       batch.forEach((g, idx) => {
         if (!r.handled.has(idx)) return;
-        done.push(g.art.link, ...g.extras.map((x) => x.link));
+        done.push(g.art.link, g.art.feedLink, ...g.extras.map((x) => x.link));
         const s = byId.get(r.storyOf.get(idx));
         if (!s) return;
         for (const x of g.extras) {

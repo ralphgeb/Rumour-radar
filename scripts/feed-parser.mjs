@@ -121,3 +121,18 @@ export function findMetaImage(html, pageUrl) {
   }
   return '';
 }
+
+// When the page itself says the article was published (meta tags, JSON-LD or <time>).
+export function findPublished(html) {
+  const metas = [...html.matchAll(/<meta\b[^>]*>/gi)].map((m) => m[0]);
+  const ok = (v) => { const t = Date.parse(v); return Number.isFinite(t) && t < Date.now() + 864e5 && t > Date.parse('2000-01-01') ? new Date(t).toISOString() : ''; };
+  for (const key of ['article:published_time', 'og:published_time', 'datePublished', 'pubdate', 'publishdate', 'publish-date', 'parsely-pub-date', 'sailthru.date', 'dc.date', 'dc.date.issued', 'date']) {
+    const tag = metas.find((t) => new RegExp(`(property|name|itemprop)\\s*=\\s*["']${key.replace(/[:.]/g, '\\$&')}["']`, 'i').test(t));
+    const v = tag && ok(attr(tag, 'content'));
+    if (v) return v;
+  }
+  const ld = html.match(/"datePublished"\s*:\s*"([^"]+)"/i);
+  if (ld && ok(ld[1])) return ok(ld[1]);
+  const time = html.match(/<time\b[^>]*datetime\s*=\s*["']([^"']+)["']/i);
+  return time ? ok(time[1]) : '';
+}
