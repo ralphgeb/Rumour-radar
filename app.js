@@ -499,10 +499,10 @@
     const base = imp * 1.6 + Math.log2(outlets) * 3 + (IMPACT[s.overall_impact] || 0) + (s.status === 'rumour' ? 0.5 : 0) + liked;
     return base * Math.pow(0.5, hours / 30); // loses half its weight every 30 hours
   }
-  function newsItems() {
+  function newsItems(section = state.section) {
     let list = stories.slice();
-    if (state.section !== 'all') {
-      list = list.filter((s) => sectionOf(s) === state.section);
+    if (section !== 'all') {
+      list = list.filter((s) => sectionOf(s) === section);
       return list.sort((a, b) => pubTime(b).localeCompare(pubTime(a)));
     }
     const score = new Map(list.map((s) => [s, rankScore(s)]));
@@ -562,43 +562,83 @@
     </section>`;
   }
 
-  function renderNews() {
-    $('#today').textContent = londonDay(new Date().toISOString());
-    $('#updatedNews').textContent = updated ? `Updated ${ago(updated).toLowerCase()} · next ${nextUpdateLabel()}` : 'Waiting for the first update';
-    $('#sectionChips').classList.add('fixed');
-    $('#sectionChips').innerHTML = SECTIONS.map(([k, l]) =>
-      `<button class="chip ${state.section === k ? 'on' : ''}" data-section="${k}">${l}</button>`).join('');
-    const isRumours = state.section === 'rumours';
-    $('#rumourBox').hidden = !isRumours;
-    $('#newsList').hidden = isRumours;
-    if (isRumours) { renderRumours(); return; }
-
-    const all = newsItems();
-    if (!stories.length) { $('#newsList').innerHTML = empty('📰', 'No stories yet', `The first update runs ${nextUpdateLabel()}, or tap refresh.`); return; }
-    if (!all.length) {
-      $('#newsList').innerHTML = empty('🔍', 'Nothing here yet', state.section === 'foryou' ? 'Try another section.' : 'Try another section.');
-      return;
-    }
-    const items = all.slice(0, state.newsLimit);
-    const brief = ['Tech', 'Finance', 'World', 'Fashion'].includes(state.section) ? (briefing.sections || {})[state.section] : null;
+  // The list for one section, as HTML (used for the current tab and its neighbours).
+  function newsHTML(section, limit) {
+    const all = newsItems(section);
+    if (!stories.length) return empty('📰', 'No stories yet', `The first update runs ${nextUpdateLabel()}, or tap refresh.`);
+    if (!all.length) return empty('🔍', 'Nothing here yet', 'Try another section.');
+    const items = all.slice(0, limit);
+    const brief = ['Tech', 'Finance', 'World', 'Fashion'].includes(section) ? (briefing.sections || {})[section] : null;
     let html;
     let rest;
     if (brief) {
-      html = sectionCover(state.section, brief);
+      html = sectionCover(section, brief);
       rest = items;
     } else {
-      const topIdx = Math.max(0, items.slice(0, state.section === 'all' ? 3 : 6).findIndex((s) => imageOf(s)));
+      const topIdx = Math.max(0, items.slice(0, section === 'all' ? 3 : 6).findIndex((s) => imageOf(s)));
       html = heroCard(items[topIdx]);
       rest = items.filter((_, i) => i !== topIdx);
     }
-    html += sectionHead(state.section === 'all' ? 'Top stories' : 'Latest', `${all.length} stories`);
+    html += sectionHead(section === 'all' ? 'Top stories' : 'Latest', `${all.length} stories`);
     for (let i = 0; i < rest.length; i += 8) {
       const chunk = rest.slice(i, i + 8);
       if (i > 0 && imageOf(chunk[0])) { html += heroCard(chunk.shift()); }
       if (chunk.length) html += `<div class="list" style="margin-bottom:12px">${chunk.map(row).join('')}</div>`;
     }
     if (all.length > items.length) html += `<button class="more" id="moreBtn">Show more stories</button>`;
-    $('#newsList').innerHTML = html;
+    return html;
+  }
+
+  // Section tabs with a highlight that slides between them.
+  const SECTION_KEYS = SECTIONS.map(([k]) => k);
+  function ensureChips() {
+    const box = $('#sectionChips');
+    if (box.dataset.built) return;
+    box.dataset.built = '1';
+    box.classList.add('fixed');
+    box.innerHTML = '<i class="chip-ind"></i>' + SECTIONS.map(([k, l]) => `<button class="chip" data-section="${k}">${l}</button>`).join('');
+  }
+  // Puts the highlight on a tab; with `toward` and `t` (0-1) it sits part-way to a neighbour (while swiping).
+  function moveIndicator(animate, toward = null, t = 0) {
+    const box = $('#sectionChips');
+    const ind = $('.chip-ind', box);
+    const chips = $$('.chip', box);
+    const i = SECTION_KEYS.indexOf(state.section);
+    if (!ind || !chips[i] || !chips[i].offsetWidth) return;
+    const a = chips[i]; const b = toward != null && chips[toward] ? chips[toward] : a;
+    const x = a.offsetLeft + (b.offsetLeft - a.offsetLeft) * t;
+    const w = a.offsetWidth + (b.offsetWidth - a.offsetWidth) * t;
+    ind.classList.toggle('anim', !!animate);
+    ind.style.width = `${w}px`;
+    ind.style.transform = `translateX(${x}px)`;
+    const lit = t > 0.5 && toward != null ? toward : i;
+    chips.forEach((c, j) => c.classList.toggle('on', j === lit));
+  }
+
+  function renderNews() {
+    $('#today').textContent = londonDay(new Date().toISOString());
+    $('#updatedNews').textContent = updated ? `Updated ${ago(updated).toLowerCase()} · next ${nextUpdateLabel()}` : 'Waiting for the first update';
+    ensureChips();
+    $('#rumourBox').hidden = true;
+    $('#newsList').hidden = false;
+    const i = SECTION_KEYS.indexOf(state.section);
+    $('#newsList').innerHTML = `<div class="news-track"><div class="news-pane cur" data-sec="${state.section}">${newsHTML(state.section, state.newsLimit)}</div></div>`;
+    requestAnimationFrame(() => moveIndicator(true));
+    // the neighbouring sections, ready to slide in when you swipe
+    clearTimeout(renderNews._t);
+    renderNews._t = setTimeout(() => {
+      const track = $('#newsList .news-track');
+      if (!track) return;
+      for (const [j, cls] of [[i - 1, 'np-prev'], [i + 1, 'np-next']]) {
+        if (j < 0 || j >= SECTION_KEYS.length) continue;
+        const pane = document.createElement('div');
+        pane.className = `news-pane ${cls}`;
+        pane.dataset.sec = SECTION_KEYS[j];
+        pane.setAttribute('aria-hidden', 'true');
+        pane.innerHTML = newsHTML(SECTION_KEYS[j], PAGE_SIZE);
+        track.appendChild(pane);
+      }
+    }, 60);
   }
 
   // ---------- RUMOURS ----------
@@ -1073,6 +1113,7 @@
     $('#navbarTitle').textContent = $(`.view[data-view="${tab}"]`).dataset.title;
     window.scrollTo(0, scrollMemory[tab] || 0);
     window.RR?.onTab?.(tab);
+    if (tab === 'news') requestAnimationFrame(() => moveIndicator(false));
     if (tab === 'news' && !store.get('rr.newsAsked', false) && !$('#todayAsk').open) setTimeout(showWelcome, 250);
     renderBadge();
     onScroll();
@@ -1082,59 +1123,72 @@
   window.addEventListener('scroll', onScroll, { passive: true });
 
   // News: swipe left / right to move between All, Tech, Finance, World and Fashion.
+  // The neighbouring section is already drawn beside the current one, so it slides
+  // in with your finger, and the tab highlight moves along with it.
   (() => {
+    const view = $('.view[data-view="news"]');
     const list = $('#newsList');
-    let x0 = null, y0 = 0, dx = 0, mode = null;
-    const keys = SECTIONS.map(([k]) => k);
-    const blocked = (el) => el.closest('.hscroll, .movers, .stiles, .chips, input, select, .tb-all');
-    $('.view[data-view="news"]').addEventListener('touchstart', (e) => {
+    let x0 = null, y0 = 0, dx = 0, mode = null, track = null, offset = 0, busy = false;
+    const W = () => list.clientWidth || window.innerWidth;
+    const blocked = (el) => el.closest('.hscroll, .movers, .stiles, input, select, .chips');
+    view.addEventListener('touchstart', (e) => {
       const t = e.touches[0];
-      if (pages.length || e.touches.length > 1 || t.clientX < 24 || t.clientX > window.innerWidth - 24 || blocked(e.target)) { x0 = null; return; }
+      if (busy || pages.length || e.touches.length > 1 || t.clientX < 20 || blocked(e.target)) { x0 = null; return; }
       x0 = t.clientX; y0 = t.clientY; dx = 0; mode = null;
     }, { passive: true });
-    $('.view[data-view="news"]').addEventListener('touchmove', (e) => {
+    view.addEventListener('touchmove', (e) => {
       if (x0 === null) return;
       const t = e.touches[0];
-      dx = t.clientX - x0; const dy = t.clientY - y0;
+      dx = t.clientX - x0;
+      const dy = t.clientY - y0;
       if (!mode) {
-        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
-        mode = Math.abs(dx) > Math.abs(dy) * 1.3 ? 'x' : 'y';
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        mode = Math.abs(dx) > Math.abs(dy) ? 'x' : 'y';
+        if (mode === 'x') {
+          track = $('.news-track', list);
+          // line the neighbours up with what's on screen
+          const navH = $('#navbar')?.offsetHeight || 0;
+          offset = Math.max(0, window.scrollY + navH - (list.getBoundingClientRect().top + window.scrollY));
+          $$('.news-pane.np-prev, .news-pane.np-next', list).forEach((p) => { p.style.top = `${offset}px`; });
+          track?.classList.remove('settle');
+        }
       }
-      if (mode !== 'x') return;
-      const i = keys.indexOf(state.section);
-      const edge = (dx > 0 && i === 0) || (dx < 0 && i === keys.length - 1);
-      list.classList.add('swiping');
-      list.style.transform = `translateX(${edge ? dx * 0.25 : dx}px)`;
-      list.style.opacity = String(1 - Math.min(Math.abs(dx) / window.innerWidth, 0.5) * 0.6);
-    }, { passive: true });
-    $('.view[data-view="news"]').addEventListener('touchend', () => {
-      if (x0 === null || mode !== 'x') { x0 = null; return; }
+      if (mode !== 'x' || !track) return;
+      e.preventDefault(); // keep the page from scrolling up and down while swiping sideways
+      const i = SECTION_KEYS.indexOf(state.section);
+      const atEdge = (dx > 0 && i === 0) || (dx < 0 && i === SECTION_KEYS.length - 1);
+      const x = atEdge ? dx / 4 : dx;
+      track.style.transform = `translate3d(${x}px,0,0)`;
+      if (!atEdge) moveIndicator(false, dx < 0 ? i + 1 : i - 1, Math.min(Math.abs(dx) / W(), 1));
+    }, { passive: false });
+    const end = () => {
+      if (x0 === null) return;
       x0 = null;
-      const i = keys.indexOf(state.section);
-      const next = dx < -60 ? i + 1 : dx > 60 ? i - 1 : i;
-      list.classList.remove('swiping');
-      list.classList.add('settle');
-      if (next === i || next < 0 || next >= keys.length) {
-        list.style.transform = ''; list.style.opacity = '';
-        setTimeout(() => list.classList.remove('settle'), 240);
+      if (mode !== 'x' || !track) return;
+      const i = SECTION_KEYS.indexOf(state.section);
+      const fast = Math.abs(dx) > W() * 0.25;
+      const next = fast ? (dx < 0 ? i + 1 : i - 1) : i;
+      track.classList.add('settle');
+      if (next === i || next < 0 || next >= SECTION_KEYS.length) {
+        track.style.transform = 'translate3d(0,0,0)';
+        moveIndicator(true);
         return;
       }
-      const dir = next > i ? -1 : 1;
-      list.style.transform = `translateX(${dir * window.innerWidth}px)`;
-      list.style.opacity = '0';
+      busy = true;
+      track.style.transform = `translate3d(${next > i ? -W() : W()}px,0,0)`;
+      moveIndicator(true, next, 1);
+      const navH = $('#navbar')?.offsetHeight || 0;
+      const listTop = list.getBoundingClientRect().top + window.scrollY;
       setTimeout(() => {
-        state.section = keys[next]; state.newsLimit = PAGE_SIZE; store.set('rr.section', state.section);
-        list.classList.remove('settle');
-        list.style.transform = `translateX(${-dir * window.innerWidth * 0.6}px)`;
+        state.section = SECTION_KEYS[next]; state.newsLimit = PAGE_SIZE; store.set('rr.section', state.section);
         renderNews();
-        window.scrollTo(0, 0);
-        requestAnimationFrame(() => requestAnimationFrame(() => {
-          list.classList.add('settle');
-          list.style.transform = ''; list.style.opacity = '';
-          setTimeout(() => list.classList.remove('settle'), 240);
-        }));
-      }, 200);
-    });
+        if (offset > 0) window.scrollTo(0, listTop - navH);
+        busy = false;
+      }, 260);
+    };
+    view.addEventListener('touchend', end);
+    view.addEventListener('touchcancel', end);
+    window.addEventListener('resize', () => moveIndicator(false));
   })();
 
   // pull down to refresh (same as the refresh button)
@@ -1167,7 +1221,7 @@
     if (story) {
       e.preventDefault();
       const label = pages.length ? 'Back' : $(`.view[data-view="${state.tab}"]`).dataset.title;
-      const scope = story.closest('.page-inner') || $(`.view[data-view="${state.tab}"]`);
+      const scope = story.closest('.page-inner, .news-pane') || $(`.view[data-view="${state.tab}"]`);
       const seq = [...new Set($$('[data-story]', scope).map((x) => x.dataset.story))].filter((x) => byId.has(x));
       openStory(story.dataset.story, label.length > 10 ? 'Back' : label, seq);
       return;

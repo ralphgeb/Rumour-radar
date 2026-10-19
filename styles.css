@@ -839,5 +839,16 @@ dialog.sheet[open] { animation: sheetUp .4s cubic-bezier(.2,.8,.2,1); }
 .switch:disabled { opacity: .5; }
 
 /* News: swipe between sections */
-#newsList.swiping { transition: none !important; }
-#newsList.settle { transition: transform .22s cubic-bezier(.25,.9,.3,1), opacity .22s; }
+#newsList { overflow: hidden; touch-action: pan-y; }
+.news-track { position: relative; will-change: transform; }
+.news-track.settle { transition: transform .26s cubic-bezier(.25,.9,.3,1); }
+.news-pane.np-prev, .news-pane.np-next { position: absolute; left: 0; top: 0; width: 100%; pointer-events: none; }
+.news-pane.np-prev { transform: translateX(-100%); }
+.news-pane.np-next { transform: translateX(100%); }
+/* sliding highlight on the section tabs */
+.chips.fixed { position: relative; }
+.chips.fixed .chip { position: relative; z-index: 1; background: transparent; transition: color .2s; }
+.chips.fixed .chip.on { background: transparent; color: var(--bg); }
+.chips.fixed::before { content: ""; position: absolute; inset: 6px 16px 12px; border-radius: 17px; background: var(--fill); }
+.chip-ind { position: absolute; top: 6px; left: 0; height: 34px; border-radius: 17px; background: var(--label); z-index: 0; will-change: transform, width; }
+.chip-ind.anim { transition: transform .32s cubic-bezier(.3,1.25,.5,1), width .32s cubic-bezier(.3,1.25,.5,1); }
