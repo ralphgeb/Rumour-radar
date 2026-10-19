@@ -616,6 +616,7 @@
   }
 
   function renderNews() {
+    if (isDesktop()) { renderNewsDesktop(); return; }
     $('#today').textContent = londonDay(new Date().toISOString());
     $('#updatedNews').textContent = updated ? `Updated ${ago(updated).toLowerCase()} · next ${nextUpdateLabel()}` : 'Waiting for the first update';
     ensureChips();
@@ -644,6 +645,121 @@
       $$('img', pane).slice(0, 12).forEach((im) => { im.loading = 'eager'; });
       track.appendChild(pane);
     }
+  }
+
+  // ---------- DESKTOP LAYOUT ----------
+  // Wide screens only (1100px and up). The phone layout above is untouched:
+  // these functions only run on a computer-sized window.
+  const desktopMQ = window.matchMedia('(min-width: 1100px)');
+  function isDesktop() { return desktopMQ.matches; }
+  const SEC_NAMES = { Tech: 'Tech', Finance: 'Markets', World: 'World', Fashion: 'Fashion' };
+  const firstPara = (t) => String(t || '').split(/\n\s*\n/)[0];
+  const fmtPct = (n) => (n == null ? '—' : `${n > 0 ? '+' : n < 0 ? '−' : ''}${Math.abs(n).toFixed(2)}%`);
+  const dirOfPct = (n) => (n > 0 ? 'up' : n < 0 ? 'down' : 'flat');
+
+  function dkMarkets() {
+    const list = (window.RR?.stockStrip?.() || []).slice(0, 8);
+    if (!list.length) return '';
+    return `<section class="dk-box dk-markets">
+      <div class="dk-box-h"><span>Markets</span><button class="dk-link" data-go="stocks">All stocks →</button></div>
+      ${list.map((k) => `<button class="dk-mkt" data-ticker="${esc(k.sym)}">
+        <span class="s">${esc(k.sym)}</span><span class="n">${esc(k.name)}</span>
+        <span class="p">${esc(k.price)}</span><span class="c ${dirOfPct(k.pct)}">${fmtPct(k.pct)}</span>
+      </button>`).join('')}
+    </section>`;
+  }
+
+  // Left column: the section's "today" summary (or, on All, every section's briefing).
+  function dkSide(sec) {
+    const secs = briefing.sections || {};
+    if (sec !== 'all' && secs[sec]) {
+      const b = secs[sec];
+      const top = byId.get(b.lead_story_id);
+      const pts = (b.points || []).map((p) => ({ ...p, s: byId.get(p.story_id) }));
+      return `<a class="dk-cover sec-${esc(sec)}" href="#" ${top ? `data-story="${esc(top.id)}"` : ''}>
+          ${media(top)}
+          <span class="dk-kicker">${esc(SECTION_LABEL[sec] || sec)} · ${esc(londonTime(b.generated))}</span>
+          <h2>${esc(b.title)}</h2>
+        </a>
+        <div class="dk-summary">${String(b.summary || '').split(/\n\s*\n/).filter((x) => x.trim()).map((x) => `<p>${esc(x.trim())}</p>`).join('')}</div>
+        ${pts.length ? `<div class="dk-box"><div class="dk-box-h"><span>Key stories</span></div>${pts.map((p) => `
+          <a class="dk-point" href="#" ${p.s ? `data-story="${esc(p.s.id)}"` : ''}>${esc(p.text)}</a>`).join('')}</div>` : ''}
+        ${(b.movers || []).length ? `<div class="dk-box"><div class="dk-box-h"><span>${sec === 'Fashion' ? 'Brands to watch' : sec === 'World' ? 'Market impact' : 'Movers to watch'}</span></div>${b.movers.map((m) => `
+          <button class="dk-mover" data-ticker="${esc(m.ticker)}"><span class="${esc(m.direction)}">${ARROW[m.direction] || '◆'}</span><b>${esc(m.ticker)}</b><span class="nm">${esc(m.note)}</span></button>`).join('')}</div>` : ''}
+        ${dkMarkets()}`;
+    }
+    // All: one short briefing per section
+    const order = ['Tech', 'Finance', 'World', 'Fashion'].filter((k) => secs[k]);
+    const ed = (briefing.editions || [])[0];
+    let html = `<div class="dk-side-h"><span class="dk-kicker">${ed ? `${esc(ed.edition)} briefing` : 'The briefing'} · ${esc(londonDay(new Date().toISOString(), { weekday: 'long', day: 'numeric', month: 'long' }))}</span><h2>What you need to know</h2></div>`;
+    order.forEach((k, idx) => {
+      const b = secs[k];
+      const top = byId.get(b.lead_story_id);
+      html += `<a class="dk-brief ${idx === 0 ? 'first' : ''} sec-${esc(k)}" href="#" ${top ? `data-story="${esc(top.id)}"` : ''}>
+        ${idx === 0 ? media(top) : ''}
+        <span class="dk-tag">${esc(SEC_NAMES[k] || k)}</span>
+        <h3>${esc(b.title)}</h3>
+        <p>${esc(firstPara(b.summary))}</p>
+      </a>`;
+    });
+    if (!order.length && ed) html += `<div class="dk-summary">${String(ed.intro || '').split(/\n\s*\n/).map((x) => `<p>${esc(x)}</p>`).join('')}</div>`;
+    return html + dkMarkets();
+  }
+
+  function dkCard(s, cls = 'dk-card') {
+    return `<a class="${cls}" href="#" data-story="${esc(s.id)}">
+      ${media(s)}
+      <div class="dk-body">
+        ${sourceLine(s)}
+        <h3>${esc(headline(s))}</h3>
+        ${s.summary ? `<p>${esc(s.summary)}</p>` : ''}
+        <div class="meta"><span>${ago(pubTime(s))}</span>${statusPill(s)}${tickers(s)}</div>
+      </div>
+    </a>`;
+  }
+
+  // Right side: lead story, a grid of cards, then a two-column list.
+  function dkMain(sec) {
+    const all = newsItems(sec);
+    if (!stories.length) return empty('📰', 'No stories yet', `The first update runs ${nextUpdateLabel()}.`);
+    if (!all.length) return empty('🔍', 'Nothing here yet', 'Try another section.');
+    const items = all.slice(0, Math.max(state.newsLimit, 60));
+    const leadIdx = Math.max(0, items.slice(0, 4).findIndex((s) => imageOf(s)));
+    const leadStory = items[leadIdx];
+    const rest = items.filter((_, i) => i !== leadIdx);
+    const grid = []; const list = [];
+    for (const s of rest) (grid.length < 6 && imageOf(s) ? grid : list).push(s);
+    let html = dkCard(leadStory, 'dk-lead');
+    if (grid.length) html += `<div class="dk-grid">${grid.map((s) => dkCard(s)).join('')}</div>`;
+    if (list.length) {
+      html += `<div class="dk-h"><span>${sec === 'all' ? 'More top stories' : 'Latest'}</span><span>${all.length} stories</span></div>`;
+      html += `<div class="dk-list">${list.map((s) => `<a class="dk-row" href="#" data-story="${esc(s.id)}">
+        <div class="txt">${sourceLine(s)}<h3>${esc(headline(s))}</h3><div class="meta"><span>${ago(pubTime(s))}</span>${statusPill(s)}${tickers(s, 2)}</div></div>
+        ${imageOf(s) ? media(s) : ''}
+      </a>`).join('')}</div>`;
+    }
+    if (all.length > items.length) html += `<button class="more" id="moreBtn">Show more stories</button>`;
+    return html;
+  }
+
+  function renderNewsDesktop() {
+    $('#today').textContent = londonDay(new Date().toISOString());
+    $('#updatedNews').textContent = updated ? `Updated ${ago(updated).toLowerCase()} · next ${nextUpdateLabel()}` : 'Waiting for the first update';
+    ensureChips();
+    $('#rumourBox').hidden = true;
+    $('#newsList').hidden = false;
+    $('#newsList').innerHTML = `<div class="dk-news"><aside class="dk-side">${dkSide(state.section)}</aside><div class="dk-main">${dkMain(state.section)}</div></div>`;
+    requestAnimationFrame(() => moveIndicator(true));
+  }
+
+  // Scrolling market ticker under the top bar (desktop only).
+  function renderTicker() {
+    const box = $('#dkTicker');
+    if (!box || !isDesktop()) return;
+    const list = window.RR?.stockStrip?.() || [];
+    if (!list.length) { box.innerHTML = ''; return; }
+    const one = list.map((k) => `<button class="tk-item" data-ticker="${esc(k.sym)}"><b>${esc(k.sym)}</b><span>${esc(k.price)}</span><span class="${dirOfPct(k.pct)}">${fmtPct(k.pct)}</span></button>`).join('');
+    box.innerHTML = `<div class="tk-run" style="animation-duration:${Math.max(40, list.length * 4)}s">${one}${one}</div>`;
   }
 
   // ---------- RUMOURS ----------
@@ -790,6 +906,7 @@
     fillPage(page, o);
     pages.at(-1)?.classList.add('under');
     pages.push(page);
+    document.body.classList.add('has-page');
     history.pushState({ page: pages.length }, '');
     requestAnimationFrame(() => requestAnimationFrame(() => {
       page.classList.add('in');
@@ -825,6 +942,7 @@
     page.classList.remove('in');
     $('.read-bar', page)?.classList.remove('in');
     pages.at(-1)?.classList.remove('under');
+    if (!pages.length) document.body.classList.remove('has-page');
     setTimeout(() => page.remove(), 380);
   }
   // Back navigation. iOS may send its own "back" from an edge swipe as well as ours,
@@ -1489,10 +1607,30 @@
   document.addEventListener('visibilitychange', () => { if (!document.hidden && !refreshing) load(); });
   setInterval(() => { if (!document.hidden && !refreshing) load(); }, 5 * 60 * 1000);
 
+  // ---------- desktop extras ----------
+  $('#dkBackdrop')?.addEventListener('click', () => { if (pages.length) history.back(); });
+  document.addEventListener('click', (e) => {
+    const go = e.target.closest('[data-go]');
+    if (go) { e.preventDefault(); switchTab(go.dataset.go); }
+  });
+  document.addEventListener('keydown', (e) => {
+    if (!isDesktop() || e.metaKey || e.ctrlKey || /input|textarea|select/i.test(e.target.tagName)) return;
+    const page = pages.at(-1);
+    if (e.key === 'Escape' && page) { history.back(); return; }
+    if (page && page._seq && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) { stepStory(page, e.key === 'ArrowRight' ? 1 : -1); return; }
+    if (!page && state.tab === 'news' && (e.key === 'ArrowRight' || e.key === 'ArrowLeft')) {
+      const i = SECTION_KEYS.indexOf(state.section) + (e.key === 'ArrowRight' ? 1 : -1);
+      if (i >= 0 && i < SECTION_KEYS.length) { state.section = SECTION_KEYS[i]; store.set('rr.section', state.section); renderNews(); window.scrollTo({ top: 0 }); }
+    }
+  });
+  const dkDate = () => { const d = $('#dkDate'); if (d) d.textContent = londonDay(new Date().toISOString(), { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }); };
+  dkDate();
+  desktopMQ.addEventListener?.('change', () => { renderAll(); renderTicker(); window.RR?.renderStocks?.(); requestAnimationFrame(() => moveIndicator(false)); });
+
   // ---------- shared with stocks.js ----------
   window.RR = Object.assign(window.RR || {}, {
     $, $$, esc, store, toast, ago, chevron, empty, sectionHead, row, media, sourceLine, statusPill, logo, headline, pubTime, lead,
-    renderPush, pushPage, openStory, runUpdate, hasLiveKey: () => !!store.get('rr.ghToken', '') && !!repoInfo(),
+    renderPush, renderTicker, isDesktop, rerenderNews: () => { if (isDesktop() && stories.length && !$('.dk-markets')) renderNews(); }, pushPage, openStory, runUpdate, hasLiveKey: () => !!store.get('rr.ghToken', '') && !!repoInfo(),
     stories: () => stories, byId: (id) => byId.get(id), isRefreshing: () => refreshing,
     backLabel: () => { const l = pages.length ? 'Back' : $(`.view[data-view="${state.tab}"]`).dataset.title; return l.length > 10 ? 'Back' : l; }
   });

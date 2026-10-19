@@ -166,6 +166,7 @@
   function render() {
     const list = $('#stockList');
     if (!list) return;
+    if (RR.isDesktop?.()) { RR.renderTicker?.(); RR.rerenderNews?.(); }
     $('#stkEdit').textContent = editing ? 'Done' : 'Edit';
     $('#stkEdit').hidden = !watch.length && !editing;
     if (!data || !data.top) {
@@ -181,7 +182,9 @@
     let html = '';
     if (watch.length) {
       html += RR.sectionHead('My stocks', `${watch.length}`);
-      html += `<div class="list stk-list">${watch.map((s) => rowHTML(s, null)).join('')}</div>`;
+      html += RR.isDesktop?.() && !editing
+        ? `<div class="dk-scards">${watch.map((s) => cardHTML(s)).join('')}</div>`
+        : `<div class="list stk-list">${watch.map((s) => rowHTML(s, null)).join('')}</div>`;
     } else {
       html += `<button class="stk-empty-add" data-open-add><span class="plus">+</span><span><b>Add your own stocks</b><small>Search any company, index or currency</small></span></button>`;
     }
@@ -189,6 +192,54 @@
     html += `<div class="list stk-list">${data.top.map((s, i) => rowHTML(s, i + 1)).join('')}</div>`;
     html += '<p class="disclaimer">Tap a price change to switch between %, value and market value. Prices from Yahoo Finance, which may be delayed. Not financial advice.</p>';
     list.innerHTML = html;
+  }
+
+  // ---------- desktop: a card per stock in "My stocks" ----------
+  let cgid = 0;
+  function cardChart(sym) {
+    const q = quote(sym);
+    const ch = chartOf(sym);
+    const d = ch.d1 && ch.d1.c.length > 1 ? ch.d1 : ch.m1;
+    if (!d || d.c.length < 2) return '<div class="dk-sc-nochart">No chart yet</div>';
+    const W = 300, H = 92;
+    const base = d === ch.d1 ? (q?.prevClose ?? d.c[0]) : d.c[0];
+    const vals = d.c;
+    const min = Math.min(...vals, base), max = Math.max(...vals, base);
+    const span = max - min || 1;
+    const y = (v) => (H - 6 - ((v - min) / span) * (H - 12)).toFixed(1);
+    const pts = vals.map((v, i) => `${((i / (vals.length - 1)) * W).toFixed(1)},${y(v)}`);
+    const up = vals[vals.length - 1] >= base;
+    const id = `cg${++cgid}`;
+    return `<svg class="dk-sc-chart ${up ? 'up' : 'down'}" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+      <defs><linearGradient id="${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="currentColor" stop-opacity=".28"/><stop offset="1" stop-color="currentColor" stop-opacity="0"/></linearGradient></defs>
+      <line x1="0" x2="${W}" y1="${y(base)}" y2="${y(base)}" class="base"/>
+      <polygon points="0,${H} ${pts.join(' ')} ${W},${H}" fill="url(#${id})"/>
+      <polyline points="${pts.join(' ')}"/></svg>`;
+  }
+  function cardHTML(sym) {
+    const q = quote(sym);
+    const name = q?.shortName || q?.name || catalogName(sym) || sym;
+    const s = data?.summaries?.[sym];
+    if (!q || q.price == null) {
+      return `<div class="dk-sc" data-stock="${esc(sym)}"><div class="dk-sc-top">${RR.logo(name, sym)}<div class="id"><b>${esc(sym)}</b><span>${esc(name)}</span></div></div>
+        <div class="dk-sc-nochart">${data?.invalid?.includes(sym) ? 'Ticker not found' : 'Price arrives with the next update'}</div></div>`;
+    }
+    return `<div class="dk-sc" data-stock="${esc(sym)}">
+      <div class="dk-sc-top">${RR.logo(name, sym)}
+        <div class="id"><b>${esc(sym)}</b><span>${esc(name)}</span></div>
+        <div class="px"><b>${money(q.price, q.currency)}</b><span class="chg ${dirOf(q.changePct)}">${pctStr(q.changePct)}</span></div>
+      </div>
+      ${cardChart(sym)}
+      <div class="dk-sc-stats">
+        <div><span>Today</span><b class="${dirOf(q.change)}">${q.change == null ? '—' : `${sign(q.change)}${Math.abs(q.change).toFixed(2)}`}</b></div>
+        <div><span>Mkt cap</span><b>${big(q.marketCap, q.currency)}</b></div>
+        <div><span>P/E</span><b>${q.pe != null ? Number(q.pe).toFixed(1) : '—'}</b></div>
+      </div>
+      ${q.low != null && q.high != null && q.high > q.low ? `<div class="dk-sc-range"><span>${money(q.low, q.currency, true)}</span>
+        <i><em style="left:${Math.max(0, Math.min(100, ((q.price - q.low) / (q.high - q.low)) * 100)).toFixed(1)}%"></em></i>
+        <span>${money(q.high, q.currency, true)}</span><small>Day range</small></div>` : ''}
+      ${s ? `<p class="dk-sc-ai"><span class="${esc(s.sentiment || '')}">✦ ${esc(s.sentiment || 'AI')}</span> ${esc(s.headline || '')}</p>` : ''}
+    </div>`;
   }
 
   // ---------- big chart on the stock page ----------
@@ -329,6 +380,15 @@
     });
   }
   RR.openStock = openStock;
+  RR.renderStocks = () => render();
+  // For the desktop layout: your stocks first, then the biggest companies.
+  RR.stockStrip = () => {
+    if (!data?.quotes) return [];
+    return [...new Set([...watch, ...(data.top || [])])].map((sym) => {
+      const q = quote(sym);
+      return q && q.price != null ? { sym, name: q.shortName || q.name || sym, price: money(q.price, q.currency, true), pct: q.changePct } : null;
+    }).filter(Boolean);
+  };
 
   // ---------- adding / removing ----------
   let syncTimer = null;

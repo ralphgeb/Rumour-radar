@@ -852,3 +852,6 @@ dialog.sheet[open] { animation: sheetUp .4s cubic-bezier(.2,.8,.2,1); }
 .chips.fixed::before { content: ""; position: absolute; inset: 6px 16px 12px; border-radius: 17px; background: var(--fill); }
 .chip-ind { position: absolute; top: 6px; left: 0; height: 34px; border-radius: 17px; background: var(--label); z-index: 0; will-change: transform, width; }
 .chip-ind.anim { transition: transform .32s cubic-bezier(.3,1.25,.5,1), width .32s cubic-bezier(.3,1.25,.5,1); }
+
+/* Desktop-only pieces (shown by desktop.css on wide screens) */
+.dk-brand, .dk-date, .dk-ticker, .dk-backdrop { display: none; }

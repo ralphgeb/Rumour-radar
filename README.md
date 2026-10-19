@@ -214,6 +214,10 @@ Tap any story to open it. You'll see:
 
 While reading a story, **swipe left for the next story and right for the previous one**. The order is the same as the list you opened it from. There's also an **Up next** card at the end of each story. The button at the bottom opens the original article. Tap a stock to see every story about it. Swipe from the left edge to go back.
 
+## On a computer
+
+Open the same address in a browser on a laptop or desktop (a window at least 1100 pixels wide) and the app switches to a desktop layout: a top bar with the sections, a scrolling markets ticker, News with the section's summary in a column on the left and the stories in a newspaper-style grid on the right, and stories opening in a panel on the right (Esc closes it; the ← → keys move between stories, or between News sections). The iPhone layout is unchanged.
+
 ## Changing things later (all in the browser)
 
 To change a file, open it on GitHub, click the **pencil** icon to edit, then **Commit changes**.
