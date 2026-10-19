@@ -102,5 +102,8 @@
   {"name": "Luxury business (Reuters, Bloomberg, FT, WSJ, NYT)", "section": "Fashion", "url": "https://news.google.com/rss/search?q=(site:reuters.com+OR+site:bloomberg.com+OR+site:ft.com+OR+site:wsj.com+OR+site:nytimes.com+OR+site:ft.com+OR+site:economist.com+OR+site:telegraph.co.uk+OR+site:theguardian.com)+(LVMH+OR+Kering+OR+Herm%C3%A8s+OR+Chanel+OR+Prada+OR+Richemont+OR+Burberry+OR+Gucci+OR+Dior+OR+%22Louis+Vuitton%22+OR+Moncler+OR+%22luxury+brand%22)+when:3d&hl=en-GB&gl=GB&ceid=GB:en"},
   {"name": "Luxury designers (Reuters, Bloomberg, FT, WSJ, NYT)", "section": "Fashion", "url": "https://news.google.com/rss/search?q=(site:reuters.com+OR+site:bloomberg.com+OR+site:ft.com+OR+site:wsj.com+OR+site:nytimes.com+OR+site:ft.com+OR+site:economist.com+OR+site:telegraph.co.uk+OR+site:theguardian.com)+(%22creative+director%22+OR+%22Paris+Fashion+Week%22+OR+%22Milan+Fashion+Week%22+OR+couture)+when:3d&hl=en-GB&gl=GB&ceid=GB:en"},
   {"name": "Jing Daily", "section": "Fashion", "url": "https://jingdaily.com/feed/"},
-  {"name": "Robb Report", "section": "Fashion", "url": "https://robbreport.com/feed/"}
+  {"name": "Robb Report", "section": "Fashion", "url": "https://robbreport.com/feed/"},
+  {"name": "Stocktwits markets (via Google News)", "section": "Finance", "url": "https://news.google.com/rss/search?q=site:stocktwits.com/news-articles+(stock+OR+shares+OR+market+OR+earnings)+when:1d&hl=en-US&gl=US&ceid=US:en"},
+  {"name": "Stocktwits tech (via Google News)", "section": "Tech", "url": "https://news.google.com/rss/search?q=site:stocktwits.com/news-articles+(AI+OR+Nvidia+OR+Apple+OR+Tesla+OR+OpenAI+OR+chip+OR+Microsoft+OR+Google)+when:1d&hl=en-US&gl=US&ceid=US:en"},
+  {"name": "Stocktwits crypto & macro (via Google News)", "section": "Finance", "url": "https://news.google.com/rss/search?q=site:stocktwits.com/news-articles+(Bitcoin+OR+crypto+OR+Fed+OR+inflation+OR+tariff)+when:1d&hl=en-US&gl=US&ceid=US:en"}
 ]
