@@ -670,7 +670,7 @@
     return `<section class="dk-box dk-markets">
       <div class="dk-box-h"><span>Markets</span><button class="dk-link" data-go="stocks">All stocks →</button></div>
       ${list.map((k) => `<button class="dk-mkt" data-ticker="${esc(k.sym)}">
-        <span class="s">${esc(k.sym)}</span><span class="n">${esc(k.name)}</span>
+        <span class="s">${esc(k.label || k.sym)}</span><span class="n">${esc(k.name)}</span>
         <span class="p">${esc(k.price)}</span><span class="c ${dirOfPct(k.pct)}">${fmtPct(k.pct)}</span>
       </button>`).join('')}
     </section>`;
@@ -797,7 +797,7 @@
     if (!box || !isDesktop()) return;
     const list = window.RR?.stockStrip?.() || [];
     if (!list.length) { box.innerHTML = ''; return; }
-    const one = list.map((k) => `<button class="tk-item" data-ticker="${esc(k.sym)}"><b>${esc(k.sym)}</b><span>${esc(k.price)}</span><span class="${dirOfPct(k.pct)}">${fmtPct(k.pct)}</span></button>`).join('');
+    const one = list.map((k) => `<button class="tk-item" data-ticker="${esc(k.sym)}"><b>${esc(k.label || k.sym)}</b><span>${esc(k.price)}</span><span class="${dirOfPct(k.pct)}">${fmtPct(k.pct)}</span></button>`).join('');
     box.innerHTML = `<div class="tk-run" style="animation-duration:${Math.max(40, list.length * 4)}s">${one}${one}</div>`;
   }
 

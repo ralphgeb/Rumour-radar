@@ -36,7 +36,20 @@
     ['SPY', 'SPDR S&P 500 ETF'], ['QQQ', 'Invesco QQQ (Nasdaq 100) ETF'], ['VUSA.L', 'Vanguard S&P 500 ETF (London)'],
     ['BTC-USD', 'Bitcoin'], ['ETH-USD', 'Ethereum'], ['GC=F', 'Gold'], ['CL=F', 'Crude oil'], ['GBPUSD=X', 'Pound / Dollar'], ['EURUSD=X', 'Euro / Dollar']
   ];
-  const catalogName = (sym) => (CATALOG.find((c) => c[0] === sym) || [])[1] || '';
+  // The world's main stock market benchmarks, by region.
+  const BENCH_GROUPS = [
+    ['United States', [['^GSPC', 'S&P 500', 'S&P 500'], ['^DJI', 'Dow Jones', 'Dow'], ['^IXIC', 'Nasdaq Composite', 'Nasdaq'], ['^NDX', 'Nasdaq-100', 'Nasdaq 100'], ['^RUT', 'Russell 2000', 'Russell']]],
+    ['Europe', [['^FTSE', 'FTSE 100', 'FTSE 100'], ['^FTMC', 'FTSE 250', 'FTSE 250'], ['^GDAXI', 'DAX 40', 'DAX'], ['^FCHI', 'CAC 40', 'CAC 40'], ['^STOXX50E', 'Euro Stoxx 50', 'Stoxx 50']]],
+    ['Asia-Pacific', [['^N225', 'Nikkei 225', 'Nikkei'], ['^HSI', 'Hang Seng', 'Hang Seng'], ['^AXJO', 'S&P/ASX 200', 'ASX 200'], ['000001.SS', 'Shanghai Composite', 'Shanghai'], ['000300.SS', 'CSI 300', 'CSI 300'], ['^BSESN', 'BSE Sensex', 'Sensex'], ['^NSEI', 'Nifty 50', 'Nifty 50']]]
+  ];
+  const BENCH = Object.fromEntries(BENCH_GROUPS.flatMap(([, l]) => l.map(([sym, name, short]) => [sym, { name, short }])));
+  const FLAG = {"^GSPC": "🇺🇸", "^DJI": "🇺🇸", "^IXIC": "🇺🇸", "^NDX": "🇺🇸", "^RUT": "🇺🇸", "^FTSE": "🇬🇧", "^FTMC": "🇬🇧", "^GDAXI": "🇩🇪", "^FCHI": "🇫🇷", "^STOXX50E": "🇪🇺", "^N225": "🇯🇵", "^HSI": "🇭🇰", "^AXJO": "🇦🇺", "000001.SS": "🇨🇳", "000300.SS": "🇨🇳", "^BSESN": "🇮🇳", "^NSEI": "🇮🇳"};
+  const badge = (name, sym) => (FLAG[sym] ? `<span class="logo idx-flag">${FLAG[sym]}</span>` : RR.logo(name, sym));
+  const isIndex = (sym) => !!BENCH[sym] || /^\^/.test(sym);
+  const label = (sym) => BENCH[sym]?.short || sym;   // what to show instead of "^GSPC"
+  const catalogName = (sym) => BENCH[sym]?.name || (CATALOG.find((c) => c[0] === sym) || [])[1] || '';
+  // Index levels are points, not money.
+  const priceOf = (sym, q, plain) => (isIndex(sym) ? Number(q.price).toLocaleString('en-GB', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : money(q.price, q.currency, plain));
   const validSymbol = (s) => /^[A-Z0-9^][A-Z0-9.\-=^]{0,14}$/.test(s);
 
   // ---------- state ----------
@@ -147,16 +160,16 @@
 
   function rowHTML(sym, rank) {
     const q = quote(sym);
-    const name = q?.shortName || q?.name || catalogName(sym) || '';
+    const name = BENCH[sym]?.name || q?.shortName || q?.name || catalogName(sym) || '';
     const missing = !q || q.price == null;
     const bad = data?.invalid?.includes(sym);
     return `<div class="stk-row${editing && rank == null ? ' editing' : ''}" data-stock="${esc(sym)}">
       ${editing && rank == null ? `<button class="stk-del" data-del="${esc(sym)}" aria-label="Remove ${esc(sym)}"><i></i></button>` : ''}
       ${rank != null ? `<span class="stk-rank">${rank}</span>` : ''}
-      <div class="stk-id"><b>${esc(sym)}</b><span>${esc(bad ? 'Ticker not found' : missing ? (RR.hasLiveKey() ? 'Fetching price…' : 'Price arrives with next update') : name)}</span></div>
+      <div class="stk-id"><b>${esc(label(sym))}</b><span>${esc(bad ? 'Ticker not found' : missing ? (RR.hasLiveKey() ? 'Fetching price…' : 'Price arrives with next update') : name)}</span></div>
       ${missing ? '<span class="spark"></span>' : spark(sym)}
       <div class="stk-px">
-        <span class="p">${missing ? '' : money(q.price, q.currency, true)}</span>
+        <span class="p">${missing ? '' : priceOf(sym, q, true)}</span>
         ${missing ? '<span class="chg flat">—</span>' : `<span class="chg ${dirOf(q.changePct)}">${esc(chgText(q))}</span>`}
       </div>
     </div>`;
@@ -181,18 +194,34 @@
     $('#stkAsOf').textContent = `${when} · ${stateLabel(lead?.marketState)}`;
     let html = '';
     if (watch.length) {
-      html += RR.sectionHead('My stocks', `${watch.length}`);
+      html += RR.sectionHead('My stocks & ETFs', `${watch.length}`);
       html += RR.isDesktop?.() && !editing
         ? `<div class="dk-scards">${watch.map((s) => cardHTML(s)).join('')}</div>`
         : `<div class="list stk-list">${watch.map((s) => rowHTML(s, null)).join('')}</div>`;
     } else {
-      html += `<button class="stk-empty-add" data-open-add><span class="plus">+</span><span><b>Add your own stocks</b><small>Search any company, index or currency</small></span></button>`;
+      html += RR.sectionHead('My stocks & ETFs', '');
+      html += `<button class="stk-empty-add" data-open-add><span class="plus">+</span><span><b>Add your own stocks and ETFs</b><small>Search any company, ETF, index or currency</small></span></button>`;
     }
-    html += RR.sectionHead('Top 20 by market value', 'US-listed');
+    html += RR.sectionHead('Top 10 by market value', 'US-listed');
     html += RR.isDesktop?.()
       ? `<div class="dk-scards">${data.top.map((s, i) => cardHTML(s, i + 1)).join('')}</div>`
       : `<div class="list stk-list">${data.top.map((s, i) => rowHTML(s, i + 1)).join('')}</div>`;
-    html += '<p class="disclaimer">Tap a price change to switch between %, value and market value. Prices from Yahoo Finance, which may be delayed. Not financial advice.</p>';
+    // Global benchmarks, by region
+    const haveB = BENCH_GROUPS.some(([, l]) => l.some(([sym]) => quote(sym)?.price != null));
+    html += RR.sectionHead('Global benchmarks', 'Main stock market indices');
+    if (!haveB) {
+      html += `<p class="disclaimer" style="margin-top:0">The world’s main indices (S&P 500, FTSE 100, DAX, Nikkei and more) arrive with the next update.</p>`;
+    } else {
+      for (const [region, list] of BENCH_GROUPS) {
+        const syms = list.map(([sym]) => sym).filter((sym) => quote(sym)?.price != null);
+        if (!syms.length) continue;
+        html += `<div class="bench-region">${esc(region)}</div>`;
+        html += RR.isDesktop?.()
+          ? `<div class="dk-scards">${syms.map((sym) => cardHTML(sym)).join('')}</div>`
+          : `<div class="list stk-list">${syms.map((sym) => rowHTML(sym, null)).join('')}</div>`;
+      }
+    }
+    html += '<p class="disclaimer">Prices from Yahoo Finance, which may be delayed. Index levels are in points. Not financial advice.</p>';
     list.innerHTML = html;
   }
 
@@ -218,24 +247,28 @@
       <polygon points="0,${H} ${pts.join(' ')} ${W},${H}" fill="url(#${id})"/>
       <polyline points="${pts.join(' ')}"/></svg>`;
   }
+  // % change over the 1-month chart's last 5 points (about a week) and over the 1-year chart.
+  const chartChange = (c, back) => { if (!c || c.length < 2) return null; const a = c[Math.max(0, c.length - 1 - back)]; const b = c[c.length - 1]; return a ? ((b - a) / a) * 100 : null; };
+  const weekChange = (sym) => chartChange(chartOf(sym).m1?.c, 5);
+  const yearChange = (sym) => chartChange(chartOf(sym).y1?.c, 1e9);
   function cardHTML(sym, rank) {
     const q = quote(sym);
-    const name = q?.shortName || q?.name || catalogName(sym) || sym;
+    const name = BENCH[sym]?.name || q?.shortName || q?.name || catalogName(sym) || sym;
     const s = data?.summaries?.[sym];
     if (!q || q.price == null) {
       return `<div class="dk-sc" data-stock="${esc(sym)}"><div class="dk-sc-top">${RR.logo(name, sym)}<div class="id"><b>${esc(sym)}</b><span>${esc(name)}</span></div></div>
         <div class="dk-sc-nochart">${data?.invalid?.includes(sym) ? 'Ticker not found' : 'Price arrives with the next update'}</div></div>`;
     }
     return `<div class="dk-sc" data-stock="${esc(sym)}">
-      <div class="dk-sc-top">${RR.logo(name, sym)}
-        <div class="id"><b>${rank ? `<em class="rk">${rank}</em>` : ''}${esc(sym)}</b><span>${esc(name)}</span></div>
-        <div class="px"><b>${money(q.price, q.currency)}</b><span class="chg ${dirOf(q.changePct)}">${pctStr(q.changePct)}</span></div>
+      <div class="dk-sc-top">${badge(name, sym)}
+        <div class="id"><b>${rank ? `<em class="rk">${rank}</em>` : ''}${esc(label(sym))}</b><span>${esc(name)}</span></div>
+        <div class="px"><b>${priceOf(sym, q)}</b><span class="chg ${dirOf(q.changePct)}">${pctStr(q.changePct)}</span></div>
       </div>
       ${cardChart(sym)}
       <div class="dk-sc-stats">
         <div><span>Today</span><b class="${dirOf(q.change)}">${q.change == null ? '—' : `${sign(q.change)}${Math.abs(q.change).toFixed(2)}`}</b></div>
-        <div><span>Mkt cap</span><b>${big(q.marketCap, q.currency)}</b></div>
-        <div><span>P/E</span><b>${q.pe != null ? Number(q.pe).toFixed(1) : '—'}</b></div>
+        ${isIndex(sym) ? `<div><span>Week</span><b class="${dirOf(weekChange(sym))}">${pctStr(weekChange(sym))}</b></div><div><span>Year</span><b class="${dirOf(yearChange(sym))}">${pctStr(yearChange(sym))}</b></div>`
+          : `<div><span>Mkt cap</span><b>${big(q.marketCap, q.currency)}</b></div><div><span>P/E</span><b>${q.pe != null ? Number(q.pe).toFixed(1) : '—'}</b></div>`}
       </div>
       ${q.low != null && q.high != null && q.high > q.low ? `<div class="dk-sc-range"><span>${money(q.low, q.currency, true)}</span>
         <i><em style="left:${Math.max(0, Math.min(100, ((q.price - q.low) / (q.high - q.low)) * 100)).toFixed(1)}%"></em></i>
@@ -321,10 +354,10 @@
     const rel = related(sym, q).slice(0, 25);
 
     let html = `<div class="sd">
-      <div class="sd-head">${RR.logo(name, sym)}<div><h1>${esc(sym)}</h1><div class="sub">${esc(name)}${q?.exchange ? ` · ${esc(q.exchange)}` : ''}</div></div></div>`;
+      <div class="sd-head">${badge(name, sym)}<div><h1>${esc(label(sym))}</h1><div class="sub">${esc(name)}${q?.exchange ? ` · ${esc(q.exchange)}` : ''}</div></div></div>`;
     if (q && q.price != null) {
-      html += `<div class="sd-price">${money(q.price, q.currency)}</div>
-        <div class="sd-chg ${dirOf(q.change)}">${q.change > 0 ? '▲' : q.change < 0 ? '▼' : ''} ${money(Math.abs(q.change ?? 0), q.currency, true)} (${pctStr(q.changePct)}) <span>today</span></div>
+      html += `<div class="sd-price">${priceOf(sym, q)}</div>
+        <div class="sd-chg ${dirOf(q.change)}">${q.change > 0 ? '▲' : q.change < 0 ? '▼' : ''} ${isIndex(sym) ? Math.abs(q.change ?? 0).toFixed(2) : money(Math.abs(q.change ?? 0), q.currency, true)} (${pctStr(q.changePct)}) <span>today</span></div>
         <div class="sd-asof">${esc(stateLabel(q.marketState))} · ${esc(data.liveAt && liveOK ? 'live ' + timeLondon(data.liveAt) : 'as of ' + timeLondon(data.pricesUpdated || data.updated))} · prices update hourly on weekdays</div>
         <section class="card sd-chart-card">
           <div class="segmented sd-seg"><button data-r="d1" class="on">1D</button><button data-r="m1">1M</button><button data-r="y1">1Y</button></div>
@@ -346,7 +379,7 @@
       html += `<section class="card"><div class="card-title"><h2><span class="sparkle">✦</span> What’s happening</h2><span class="sent-pill ${s.sentiment}">${esc(s.sentiment)}</span></div>
         <p><b>${esc(s.headline)}</b></p><p>${esc(s.summary)}</p>
         <p class="sd-note">Scout AI summary · ${esc(timeLondon(s.generated))} · refreshed with your morning briefing</p></section>`;
-    } else if (q && q.price != null) {
+    } else if (q && q.price != null && !isIndex(sym)) {
       html += `<section class="card"><div class="card-title"><h2><span class="sparkle">✦</span> What’s happening</h2></div>
         <p class="sd-note" style="font-size:14px">The Scout AI summary is on its way${RR.hasLiveKey() ? ' (about a minute after adding)' : ''}, and it’s refreshed with every morning briefing.</p></section>`;
     }
@@ -364,7 +397,7 @@
       <a class="btn-secondary" href="https://finance.yahoo.com/quote/${encodeURIComponent(sym)}" target="_blank" rel="noopener">View on Yahoo Finance</a>
       <p class="disclaimer">Prices may be delayed. The summary is AI-generated from the app’s news coverage and can be wrong. Not financial advice.</p></div>`;
 
-    const page = RR.pushPage({ title: sym, backLabel: backLabel || RR.backLabel(), html });
+    const page = RR.pushPage({ title: label(sym), backLabel: backLabel || RR.backLabel(), html });
     const box = page.querySelector('.sd-chart-card');
     if (box) {
       drawChart(box, sym, 'd1');
@@ -386,9 +419,10 @@
   // For the desktop layout: your stocks first, then the biggest companies.
   RR.stockStrip = () => {
     if (!data?.quotes) return [];
-    return [...new Set([...watch, ...(data.top || [])])].map((sym) => {
+    const lead = ['^GSPC', '^IXIC', '^DJI', '^FTSE', '^GDAXI', '^N225', '^HSI'];
+    return [...new Set([...lead, ...watch, ...(data.top || [])])].map((sym) => {
       const q = quote(sym);
-      return q && q.price != null ? { sym, name: q.shortName || q.name || sym, price: money(q.price, q.currency, true), pct: q.changePct } : null;
+      return q && q.price != null ? { sym, label: label(sym), name: BENCH[sym]?.name || q.shortName || q.name || sym, price: priceOf(sym, q, true), pct: q.changePct } : null;
     }).filter(Boolean);
   };
 

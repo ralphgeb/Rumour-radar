@@ -16,7 +16,9 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const PRICES_PY = path.join(path.dirname(fileURLToPath(import.meta.url)), 'prices.py');
-const TOP_N = 20;
+const TOP_N = 10;
+// The world's main stock market benchmarks (Yahoo Finance symbols), shown on the Stocks tab.
+export const BENCHMARKS = ['^GSPC', '^DJI', '^IXIC', '^NDX', '^RUT', '^FTSE', '^FTMC', '^GDAXI', '^FCHI', '^STOXX50E', '^N225', '^HSI', '^AXJO', '000001.SS', '000300.SS', '^BSESN', '^NSEI'];
 const MAX_WATCH = 40;
 
 // Roughly the largest US-listed companies. The top 20 are picked from these by live market value.
@@ -131,7 +133,8 @@ export async function updateStocks({ prev, watchlist, stories, ai, summariseMode
     updated: new Date().toISOString(),
     pricesUpdated: new Date().toISOString(),
     summariesUpdated: prev?.summariesUpdated || null,
-    top: prev?.top?.length ? prev.top : CANDIDATES.slice(0, TOP_N),
+    top: (prev?.top?.length ? prev.top : CANDIDATES).slice(0, TOP_N),
+    benchmarks: BENCHMARKS,
     watch,
     quotes: {}, charts: {}, news: { ...(prev?.news || {}) }, summaries: { ...(prev?.summaries || {}) }, invalid: []
   };
@@ -163,6 +166,21 @@ export async function updateStocks({ prev, watchlist, stories, ai, summariseMode
       else if (had(s)) { data.quotes[s] = prev.quotes[s]; data.charts[s] = prev.charts?.[s] || {}; }
       else data.invalid.push(s);
     }
+  }
+  // Benchmarks: prices and charts (no AI summaries or headlines needed)
+  {
+    const freshB = BENCHMARKS.filter((s) => !had(s) || mode === 'all');
+    const knownB = BENCHMARKS.filter((s) => !freshB.includes(s));
+    const [fb, lb] = await Promise.all([
+      runPy(freshB, { info: false, charts: ['d1', 'm1', 'y1'], news: [] }),
+      runPy(knownB, { info: false, charts: ['d1'], news: [] })
+    ]);
+    for (const s of BENCHMARKS) {
+      if (fb[s]?.quote) { data.quotes[s] = round(fb[s].quote); data.charts[s] = fb[s].charts; }
+      else if (lb[s]?.quote) { data.quotes[s] = mergeLight(prev.quotes[s], round(lb[s].quote)); data.charts[s] = { ...(prev.charts?.[s] || {}), d1: lb[s].charts.d1 }; }
+      else if (had(s)) { data.quotes[s] = prev.quotes[s]; data.charts[s] = prev.charts?.[s] || {}; }
+    }
+    log(`Benchmarks: ${BENCHMARKS.filter((s) => data.quotes[s]).length} of ${BENCHMARKS.length}.`);
   }
   const shown = [...new Set([...data.top, ...watch])];
   log(`Prices for ${Object.keys(data.quotes).length} of ${shown.length} stocks${data.invalid.length ? `; not found: ${data.invalid.join(', ')}` : ''}.`);

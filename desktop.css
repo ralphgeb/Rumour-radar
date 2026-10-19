@@ -264,3 +264,5 @@ body.has-page .dk-backdrop { opacity: 1; pointer-events: auto; }
 /* Today: the red line stays on one line */
 .view[data-view="today"] .large-title .eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .view[data-view="today"] .large-title > * { flex-shrink: 0; }
+.view[data-view="stocks"] .bench-region { margin: 18px 0 10px; font-size: 12px; font-weight: 800; letter-spacing: .07em; color: var(--dk-strong); }
+.dk-sc-top .logo.idx-flag { font-size: 24px; }
