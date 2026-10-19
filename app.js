@@ -624,21 +624,26 @@
     const i = SECTION_KEYS.indexOf(state.section);
     $('#newsList').innerHTML = `<div class="news-track"><div class="news-pane cur" data-sec="${state.section}">${newsHTML(state.section, state.newsLimit)}</div></div>`;
     requestAnimationFrame(() => moveIndicator(true));
-    // the neighbouring sections, ready to slide in when you swipe
     clearTimeout(renderNews._t);
-    renderNews._t = setTimeout(() => {
-      const track = $('#newsList .news-track');
-      if (!track) return;
-      for (const [j, cls] of [[i - 1, 'np-prev'], [i + 1, 'np-next']]) {
-        if (j < 0 || j >= SECTION_KEYS.length) continue;
-        const pane = document.createElement('div');
-        pane.className = `news-pane ${cls}`;
-        pane.dataset.sec = SECTION_KEYS[j];
-        pane.setAttribute('aria-hidden', 'true');
-        pane.innerHTML = newsHTML(SECTION_KEYS[j], PAGE_SIZE);
-        track.appendChild(pane);
-      }
-    }, 60);
+    renderNews._t = setTimeout(buildNeighbours, 60);
+  }
+  // The neighbouring sections, ready to slide in when you swipe. Their pictures load
+  // straight away, so nothing pops in when they arrive on screen.
+  function buildNeighbours() {
+    const track = $('#newsList .news-track');
+    if (!track) return;
+    $$('.news-pane.np-prev, .news-pane.np-next', track).forEach((p) => p.remove());
+    const i = SECTION_KEYS.indexOf(state.section);
+    for (const [j, cls] of [[i - 1, 'np-prev'], [i + 1, 'np-next']]) {
+      if (j < 0 || j >= SECTION_KEYS.length) continue;
+      const pane = document.createElement('div');
+      pane.className = `news-pane ${cls}`;
+      pane.dataset.sec = SECTION_KEYS[j];
+      pane.setAttribute('aria-hidden', 'true');
+      pane.innerHTML = newsHTML(SECTION_KEYS[j], PAGE_SIZE);
+      $$('img', pane).slice(0, 12).forEach((im) => { im.loading = 'eager'; });
+      track.appendChild(pane);
+    }
   }
 
   // ---------- RUMOURS ----------
@@ -1174,17 +1179,50 @@
         moveIndicator(true);
         return;
       }
+      slideTo(next);
+    };
+    // Slides to a neighbouring section (also used when you tap the next or previous tab).
+    function slideTo(next) {
+      const i = SECTION_KEYS.indexOf(state.section);
+      track = $('.news-track', list);
+      if (!track) return;
+      if (!busy && offset === undefined) offset = 0;
       busy = true;
+      track.classList.add('settle');
       track.style.transform = `translate3d(${next > i ? -W() : W()}px,0,0)`;
       moveIndicator(true, next, 1);
       const navH = $('#navbar')?.offsetHeight || 0;
       const listTop = list.getBoundingClientRect().top + window.scrollY;
       setTimeout(() => {
         state.section = SECTION_KEYS[next]; state.newsLimit = PAGE_SIZE; store.set('rr.section', state.section);
-        renderNews();
-        if (offset > 0) window.scrollTo(0, listTop - navH);
+        // Keep the pane that just slid in (pictures already loaded) instead of redrawing it.
+        const target = $(`.news-pane.${next > i ? 'np-next' : 'np-prev'}`, list);
+        if (target) {
+          track.classList.remove('settle');
+          $$('.news-pane', track).forEach((p) => { if (p !== target) p.remove(); });
+          target.className = 'news-pane cur';
+          target.style.top = '';
+          target.removeAttribute('aria-hidden');
+          track.style.transform = '';
+          if (offset > 0) window.scrollTo(0, listTop - navH);
+          moveIndicator(true);
+          setTimeout(buildNeighbours, 30);
+        } else {
+          renderNews();
+          if (offset > 0) window.scrollTo(0, listTop - navH);
+        }
         busy = false;
       }, 260);
+    }
+    window.__slideNews = (next) => {
+      if (busy || pages.length) return false;
+      const navH = $('#navbar')?.offsetHeight || 0;
+      offset = Math.max(0, window.scrollY + navH - (list.getBoundingClientRect().top + window.scrollY));
+      $$('.news-pane.np-prev, .news-pane.np-next', list).forEach((p) => { p.style.top = `${offset}px`; });
+      const cls = next > SECTION_KEYS.indexOf(state.section) ? 'np-next' : 'np-prev';
+      if (!$(`.news-pane.${cls}`, list)) return false;
+      slideTo(next);
+      return true;
     };
     view.addEventListener('touchend', end);
     view.addEventListener('touchcancel', end);
@@ -1241,6 +1279,8 @@
   $('#refreshBtn').addEventListener('click', refreshAll);
   $('#sectionChips').addEventListener('click', (e) => {
     const b = e.target.closest('[data-section]'); if (!b) return;
+    const from = SECTION_KEYS.indexOf(state.section); const to = SECTION_KEYS.indexOf(b.dataset.section);
+    if (Math.abs(to - from) === 1 && window.__slideNews?.(to)) return;
     state.section = b.dataset.section; state.newsLimit = PAGE_SIZE; store.set('rr.section', state.section);
     if (state.section === 'rumours') { store.set('rr.rumoursSeen', new Date().toISOString()); renderBadge(); }
     renderNews();
