@@ -782,7 +782,17 @@
     pages.at(-1)?.classList.remove('under');
     setTimeout(() => page.remove(), 380);
   }
-  window.addEventListener('popstate', () => { if (pages.length) popPage(); });
+  // Back navigation. iOS may send its own "back" from an edge swipe as well as ours,
+  // so we close pages down to the depth the history says, and keep a spare entry
+  // under the app so an extra "back" never leaves (or reloads) it.
+  let lastPop = 0;
+  window.addEventListener('popstate', (e) => {
+    lastPop = Date.now();
+    const depth = e.state && typeof e.state.page === 'number' ? e.state.page : 0;
+    while (pages.length > depth) popPage();
+    if (!e.state || e.state.cushion) history.pushState({ page: 0 }, '');
+  });
+  try { history.replaceState({ page: 0, cushion: 1 }, ''); history.pushState({ page: 0 }, ''); } catch { /* ignore */ }
 
   // iOS-style swipe from the left edge to go back
   function enableEdgeSwipe(page) {
@@ -799,7 +809,9 @@
     page.addEventListener('touchend', () => {
       if (startX === null) return;
       page.style.transition = ''; page.style.transform = '';
-      if (dx > window.innerWidth * .3) history.back();
+      const started = Date.now();
+      // only go back if iOS hasn't already done it for this swipe
+      if (dx > window.innerWidth * .3) setTimeout(() => { if (lastPop < started - 50 && pages.includes(page)) history.back(); }, 120);
       startX = null;
     });
   }
@@ -1068,6 +1080,62 @@
 
   function onScroll() { $('#navbar').classList.toggle('scrolled', window.scrollY > 40); }
   window.addEventListener('scroll', onScroll, { passive: true });
+
+  // News: swipe left / right to move between All, Tech, Finance, World and Fashion.
+  (() => {
+    const list = $('#newsList');
+    let x0 = null, y0 = 0, dx = 0, mode = null;
+    const keys = SECTIONS.map(([k]) => k);
+    const blocked = (el) => el.closest('.hscroll, .movers, .stiles, .chips, input, select, .tb-all');
+    $('.view[data-view="news"]').addEventListener('touchstart', (e) => {
+      const t = e.touches[0];
+      if (pages.length || e.touches.length > 1 || t.clientX < 24 || t.clientX > window.innerWidth - 24 || blocked(e.target)) { x0 = null; return; }
+      x0 = t.clientX; y0 = t.clientY; dx = 0; mode = null;
+    }, { passive: true });
+    $('.view[data-view="news"]').addEventListener('touchmove', (e) => {
+      if (x0 === null) return;
+      const t = e.touches[0];
+      dx = t.clientX - x0; const dy = t.clientY - y0;
+      if (!mode) {
+        if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+        mode = Math.abs(dx) > Math.abs(dy) * 1.3 ? 'x' : 'y';
+      }
+      if (mode !== 'x') return;
+      const i = keys.indexOf(state.section);
+      const edge = (dx > 0 && i === 0) || (dx < 0 && i === keys.length - 1);
+      list.classList.add('swiping');
+      list.style.transform = `translateX(${edge ? dx * 0.25 : dx}px)`;
+      list.style.opacity = String(1 - Math.min(Math.abs(dx) / window.innerWidth, 0.5) * 0.6);
+    }, { passive: true });
+    $('.view[data-view="news"]').addEventListener('touchend', () => {
+      if (x0 === null || mode !== 'x') { x0 = null; return; }
+      x0 = null;
+      const i = keys.indexOf(state.section);
+      const next = dx < -60 ? i + 1 : dx > 60 ? i - 1 : i;
+      list.classList.remove('swiping');
+      list.classList.add('settle');
+      if (next === i || next < 0 || next >= keys.length) {
+        list.style.transform = ''; list.style.opacity = '';
+        setTimeout(() => list.classList.remove('settle'), 240);
+        return;
+      }
+      const dir = next > i ? -1 : 1;
+      list.style.transform = `translateX(${dir * window.innerWidth}px)`;
+      list.style.opacity = '0';
+      setTimeout(() => {
+        state.section = keys[next]; state.newsLimit = PAGE_SIZE; store.set('rr.section', state.section);
+        list.classList.remove('settle');
+        list.style.transform = `translateX(${-dir * window.innerWidth * 0.6}px)`;
+        renderNews();
+        window.scrollTo(0, 0);
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          list.classList.add('settle');
+          list.style.transform = ''; list.style.opacity = '';
+          setTimeout(() => list.classList.remove('settle'), 240);
+        }));
+      }, 200);
+    });
+  })();
 
   // pull down to refresh (same as the refresh button)
   (() => {

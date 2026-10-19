@@ -43,7 +43,7 @@
   let data = null;                       // data/stocks.json
   let watch = store.get('rr.watch', []);  // your stocks (kept on this phone)
   let editing = false;
-  let chgMode = store.get('rr.chgMode', 'pct'); // pct | abs | cap
+  const chgMode = 'pct'; // the list always shows the % change
   let liveOK = null;                      // can this phone reach Yahoo directly? (null = not tried)
   let liveAt = 0;
 
@@ -157,7 +157,7 @@
       ${missing ? '<span class="spark"></span>' : spark(sym)}
       <div class="stk-px">
         <span class="p">${missing ? '' : money(q.price, q.currency, true)}</span>
-        ${missing ? '<span class="chg flat">—</span>' : `<button class="chg ${dirOf(q.changePct)}" data-chg>${esc(chgText(q))}</button>`}
+        ${missing ? '<span class="chg flat">—</span>' : `<span class="chg ${dirOf(q.changePct)}">${esc(chgText(q))}</span>`}
       </div>
     </div>`;
   }
@@ -462,9 +462,6 @@
       if (e.target.closest('[data-open-add]')) { openSheet(); return; }
       const del = e.target.closest('[data-del]');
       if (del) { removeStock(del.dataset.del); if (!watch.length) editing = false; render(); return; }
-      if (e.target.closest('[data-chg]')) {
-        chgMode = { pct: 'abs', abs: 'cap', cap: 'pct' }[chgMode]; store.set('rr.chgMode', chgMode); render(); return;
-      }
       const row = e.target.closest('[data-stock]');
       if (row && !editing) openStock(row.dataset.stock, 'Stocks');
     });

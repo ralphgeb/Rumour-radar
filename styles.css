@@ -703,12 +703,12 @@ dialog.sheet[open] { animation: sheetUp .4s cubic-bezier(.2,.8,.2,1); }
 .spark.up polyline { stroke: var(--green); }
 .spark.down polyline { stroke: var(--red); }
 .spark .base { stroke: var(--label-3); stroke-width: 1; stroke-dasharray: 2 3; vector-effect: non-scaling-stroke; }
-.stk-px { display: grid; justify-items: end; gap: 4px; flex: none; min-width: 84px; }
+.stk-px { display: grid; justify-items: end; gap: 3px; flex: none; min-width: 72px; }
 .stk-px .p { font-size: 16px; font-weight: 600; font-variant-numeric: tabular-nums; }
-.chg { min-width: 76px; height: 26px; padding: 0 8px; border-radius: 7px; font-size: 14px; font-weight: 700; color: #fff; text-align: right; font-variant-numeric: tabular-nums; }
+.chg { display: inline-block; min-width: 0; height: 20px; line-height: 20px; padding: 0 6px; border-radius: 5px; font-size: 13px; font-weight: 600; color: #fff; text-align: right; font-variant-numeric: tabular-nums; }
 .chg.up { background: var(--green); }
 .chg.down { background: var(--red); }
-.chg.flat { background: var(--fill-2); color: var(--label-2); display: inline-flex; align-items: center; justify-content: flex-end; }
+.chg.flat { background: var(--fill-2); color: var(--label-2); }
 .stk-del { width: 22px; height: 22px; border-radius: 50%; background: var(--red); flex: none; display: grid; place-items: center; }
 .stk-del i { width: 10px; height: 2.5px; border-radius: 2px; background: #fff; display: block; }
 .stk-empty-add { display: flex; align-items: center; gap: 12px; width: calc(100% - 32px); margin: 10px 16px 0; padding: 14px; border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); text-align: left; }
@@ -837,3 +837,7 @@ dialog.sheet[open] { animation: sheetUp .4s cubic-bezier(.2,.8,.2,1); }
 .switch:checked { background: #34c759; }
 .switch:checked::after { transform: translateX(20px); }
 .switch:disabled { opacity: .5; }
+
+/* News: swipe between sections */
+#newsList.swiping { transition: none !important; }
+#newsList.settle { transition: transform .22s cubic-bezier(.25,.9,.3,1), opacity .22s; }
