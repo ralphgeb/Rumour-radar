@@ -503,8 +503,11 @@
     const base = imp * 1.6 + Math.log2(outlets) * 3 + (IMPACT[s.overall_impact] || 0) + (s.status === 'rumour' ? 0.5 : 0) + liked;
     return base * Math.pow(0.5, hours / 30); // loses half its weight every 30 hours
   }
+  // Only stories first published in the last 72 hours are shown.
+  const MAX_AGE_MS = 72 * 3600e3;
+  const fresh = (s) => { const t = Date.parse(pubTime(s)); return !t || Date.now() - t <= MAX_AGE_MS; };
   function newsItems(section = state.section) {
-    let list = stories.slice();
+    let list = stories.filter(fresh);
     if (section !== 'all') {
       list = list.filter((s) => sectionOf(s) === section);
       return list.sort((a, b) => pubTime(b).localeCompare(pubTime(a)));
