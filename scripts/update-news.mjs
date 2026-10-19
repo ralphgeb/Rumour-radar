@@ -30,7 +30,7 @@ const PARALLEL = USE_BATCH ? 100 : 3; // AI requests running at the same time
 const MAX_ARTICLE_AGE_H = 30;  // ignore articles older than this
 const FASHION_AGE_H = 72;      // fashion sites publish less often, so look further back
 const SECTION_MIN = 100;       // each section's fair share of MAX_STORIES
-const KEEP_DAYS = 4;           // drop stories older than this
+const KEEP_DAYS = 3;           // drop stories first published more than this many days ago (72 hours)
 const MAX_STORIES = 400;       // stories kept in the app, shared equally between sections
 const MAX_SEEN = 8000;         // how many article links to remember
 const ARTICLE_CHARS = 6000;    // how much of each article the AI reads
@@ -1347,7 +1347,7 @@ export async function main() {
   const cutoff = new Date(Date.now() - KEEP_DAYS * 86400e3).toISOString();
   for (const s of news.stories) s.sources = (s.sources || []).filter((x) => !BLOCKED.test(x.name) && !BLOCKED.test(x.link));
   const recent = news.stories
-    .filter((s) => s.sources.length && s.last_updated >= cutoff)
+    .filter((s) => s.sources.length && (s.first_published || s.first_seen || s.last_updated) >= cutoff)
     .sort((a, b) => b.last_updated.localeCompare(a.last_updated));
   // Each section keeps its newest stories, so busy sections can't push quieter ones (like Fashion) out.
   const keep = new Set();
