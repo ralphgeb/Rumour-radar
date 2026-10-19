@@ -854,4 +854,4 @@ dialog.sheet[open] { animation: sheetUp .4s cubic-bezier(.2,.8,.2,1); }
 .chip-ind.anim { transition: transform .32s cubic-bezier(.3,1.25,.5,1), width .32s cubic-bezier(.3,1.25,.5,1); }
 
 /* Desktop-only pieces (shown by desktop.css on wide screens) */
-.dk-brand, .dk-date, .dk-ticker, .dk-backdrop { display: none; }
+.dk-brand, .dk-date, .dk-ticker, .dk-backdrop, .dk-only { display: none; }

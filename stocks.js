@@ -166,7 +166,7 @@
   function render() {
     const list = $('#stockList');
     if (!list) return;
-    if (RR.isDesktop?.()) { RR.renderTicker?.(); RR.rerenderNews?.(); }
+    if (RR.isDesktop?.()) { RR.renderTicker?.(); RR.rerenderNews?.(); RR.dkTodaySide?.(); }
     $('#stkEdit').textContent = editing ? 'Done' : 'Edit';
     $('#stkEdit').hidden = !watch.length && !editing;
     if (!data || !data.top) {
@@ -343,10 +343,10 @@
     if (s) {
       html += `<section class="card"><div class="card-title"><h2><span class="sparkle">✦</span> What’s happening</h2><span class="sent-pill ${s.sentiment}">${esc(s.sentiment)}</span></div>
         <p><b>${esc(s.headline)}</b></p><p>${esc(s.summary)}</p>
-        <p class="sd-note">AI summary · ${esc(timeLondon(s.generated))} · refreshed with your morning briefing</p></section>`;
+        <p class="sd-note">Scout AI summary · ${esc(timeLondon(s.generated))} · refreshed with your morning briefing</p></section>`;
     } else if (q && q.price != null) {
       html += `<section class="card"><div class="card-title"><h2><span class="sparkle">✦</span> What’s happening</h2></div>
-        <p class="sd-note" style="font-size:14px">The AI summary is on its way${RR.hasLiveKey() ? ' (about a minute after adding)' : ''}, and it’s refreshed with every morning briefing.</p></section>`;
+        <p class="sd-note" style="font-size:14px">The Scout AI summary is on its way${RR.hasLiveKey() ? ' (about a minute after adding)' : ''}, and it’s refreshed with every morning briefing.</p></section>`;
     }
     const heads = (data?.news?.[sym] || []).slice(0, 8);
     if (heads.length) {

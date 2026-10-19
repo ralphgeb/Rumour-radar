@@ -307,6 +307,10 @@
       <p class="disclaimer">Written by AI from the day’s headlines. It can make mistakes. Not financial advice.</p>`;
 
   function renderToday() {
+    renderTodayInner();
+    if (isDesktop()) dkTodaySide();
+  }
+  function renderTodayInner() {
     const topic = todayTopic();
     if (topic !== 'Tech') { renderTodaySection(topic); return; }
     const onlyTech = true;
@@ -753,6 +757,33 @@
   }
 
   // Scrolling market ticker under the top bar (desktop only).
+  // Today on desktop: subtitle, stocks to watch and markets under the weather and Tube.
+  function dkTodaySide() {
+    const sub = $('#todaySub');
+    if (sub) sub.textContent = updated ? `Updated ${ago(updated).toLowerCase()} · next ${nextUpdateLabel()}` : 'Waiting for the first update';
+    const box = $('#dkTodayExtra');
+    if (!box) return;
+    const topic = todayTopic();
+    const ed = (briefing.editions || [])[0];
+    const sec = (briefing.sections || {})[topic];
+    const watch = topic === 'Tech' ? (ed?.stocks_to_watch || []) : (sec?.movers || []);
+    let html = '';
+    if (watch.length) {
+      html += `<section class="dk-box"><div class="dk-box-h"><span>${topic === 'Fashion' ? 'Brands to watch' : 'Stocks to watch'}</span></div>${watch.slice(0, 6).map((k) => `
+        <button class="dk-watch" data-ticker="${esc(k.ticker)}">
+          <span class="ar ${esc(k.direction)}">${ARROW[k.direction] || '◆'}</span>
+          <span class="t"><b>${esc(k.ticker)}</b> <span>${esc(k.name || '')}</span></span>
+          <span class="nt">${esc(k.note || '')}</span>
+        </button>`).join('')}</section>`;
+    }
+    const brief = (ed?.in_brief || []).map((x) => ({ ...x, s: byId.get(x.story_id) })).filter((x) => x.s).slice(0, 5);
+    if (topic === 'Tech' && brief.length) {
+      html += `<section class="dk-box"><div class="dk-box-h"><span>In brief</span></div>${brief.map((x) => `<a class="dk-point" href="#" data-story="${esc(x.s.id)}">${esc(x.line)}</a>`).join('')}</section>`;
+    }
+    html += dkMarkets();
+    box.innerHTML = html;
+  }
+
   function renderTicker() {
     const box = $('#dkTicker');
     if (!box || !isDesktop()) return;
@@ -1113,7 +1144,7 @@
     const hasImg = !!imageOf(s);
 
     const summaryCard = `<section class="card">
-        <div class="card-title"><h2><span class="sparkle">✦</span> AI summary</h2></div>
+        <div class="card-title"><h2><span class="sparkle">✦</span> Scout AI summary</h2></div>
         <p>${esc(s.summary || s.claim)}</p>
         ${(s.key_points || []).length ? `<ul class="kp">${s.key_points.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}
       </section>`;
@@ -1630,7 +1661,7 @@
   // ---------- shared with stocks.js ----------
   window.RR = Object.assign(window.RR || {}, {
     $, $$, esc, store, toast, ago, chevron, empty, sectionHead, row, media, sourceLine, statusPill, logo, headline, pubTime, lead,
-    renderPush, renderTicker, isDesktop, rerenderNews: () => { if (isDesktop() && stories.length && !$('.dk-markets')) renderNews(); }, pushPage, openStory, runUpdate, hasLiveKey: () => !!store.get('rr.ghToken', '') && !!repoInfo(),
+    renderPush, renderTicker, isDesktop, dkTodaySide: () => { if (isDesktop()) dkTodaySide(); }, rerenderNews: () => { if (isDesktop() && stories.length && !$('.dk-markets')) renderNews(); }, pushPage, openStory, runUpdate, hasLiveKey: () => !!store.get('rr.ghToken', '') && !!repoInfo(),
     stories: () => stories, byId: (id) => byId.get(id), isRefreshing: () => refreshing,
     backLabel: () => { const l = pages.length ? 'Back' : $(`.view[data-view="${state.tab}"]`).dataset.title; return l.length > 10 ? 'Back' : l; }
   });
