@@ -759,8 +759,13 @@
   // Scrolling market ticker under the top bar (desktop only).
   // Today on desktop: subtitle, stocks to watch and markets under the weather and Tube.
   function dkTodaySide() {
+    // one short red line above the title, like the other pages; the date moves to the grey line
+    const eb = $('#todayEyebrow');
+    const m = (eb?.textContent || '').match(/^(.*?briefing)/i);
+    if (eb && m) eb.textContent = m[1];
     const sub = $('#todaySub');
-    if (sub) sub.textContent = updated ? `Updated ${ago(updated).toLowerCase()} · next ${nextUpdateLabel()}` : 'Waiting for the first update';
+    const day = londonDay(new Date().toISOString(), { weekday: 'long', day: 'numeric', month: 'long' });
+    if (sub) sub.textContent = updated ? `${day} · updated ${ago(updated).toLowerCase()} · next ${nextUpdateLabel()}` : day;
     const box = $('#dkTodayExtra');
     if (!box) return;
     const topic = todayTopic();

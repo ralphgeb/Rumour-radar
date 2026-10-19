@@ -189,7 +189,9 @@
       html += `<button class="stk-empty-add" data-open-add><span class="plus">+</span><span><b>Add your own stocks</b><small>Search any company, index or currency</small></span></button>`;
     }
     html += RR.sectionHead('Top 20 by market value', 'US-listed');
-    html += `<div class="list stk-list">${data.top.map((s, i) => rowHTML(s, i + 1)).join('')}</div>`;
+    html += RR.isDesktop?.()
+      ? `<div class="dk-scards">${data.top.map((s, i) => cardHTML(s, i + 1)).join('')}</div>`
+      : `<div class="list stk-list">${data.top.map((s, i) => rowHTML(s, i + 1)).join('')}</div>`;
     html += '<p class="disclaimer">Tap a price change to switch between %, value and market value. Prices from Yahoo Finance, which may be delayed. Not financial advice.</p>';
     list.innerHTML = html;
   }
@@ -216,7 +218,7 @@
       <polygon points="0,${H} ${pts.join(' ')} ${W},${H}" fill="url(#${id})"/>
       <polyline points="${pts.join(' ')}"/></svg>`;
   }
-  function cardHTML(sym) {
+  function cardHTML(sym, rank) {
     const q = quote(sym);
     const name = q?.shortName || q?.name || catalogName(sym) || sym;
     const s = data?.summaries?.[sym];
@@ -226,7 +228,7 @@
     }
     return `<div class="dk-sc" data-stock="${esc(sym)}">
       <div class="dk-sc-top">${RR.logo(name, sym)}
-        <div class="id"><b>${esc(sym)}</b><span>${esc(name)}</span></div>
+        <div class="id"><b>${rank ? `<em class="rk">${rank}</em>` : ''}${esc(sym)}</b><span>${esc(name)}</span></div>
         <div class="px"><b>${money(q.price, q.currency)}</b><span class="chg ${dirOf(q.changePct)}">${pctStr(q.changePct)}</span></div>
       </div>
       ${cardChart(sym)}

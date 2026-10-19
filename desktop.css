@@ -185,7 +185,7 @@ body.has-page .dk-backdrop { opacity: 1; pointer-events: auto; }
 #todayBody .list, #todayBody .hscroll, #todayBody .stiles, #todayBody .editions { margin-left: 0; margin-right: 0; }
 
 /* ---------- Stocks and Settings: centred columns ---------- */
-.view[data-view="stocks"] { max-width: 1240px; margin: 0 auto; }
+
 .view[data-view="settings"] { max-width: 720px; margin: 0 auto; }
 .view[data-view="today"] .large-title { gap: 0; max-height: calc(100vh - var(--dk-top) - 36px); overflow-y: auto; scrollbar-width: thin; }
 .view[data-view="today"] .large-title .eyebrow { order: 1; }
@@ -245,3 +245,22 @@ body.has-page .dk-backdrop { opacity: 1; pointer-events: auto; }
 #todayBody .intro::first-letter { float: none; font-size: inherit; line-height: inherit; font-weight: inherit; padding: 0; color: inherit; }
 #todayBody .intro:first-of-type { font-size: 19px; font-weight: 600; line-height: 1.55; }
 .dk-lead h3, .dk-cover h2, .dk-side-h h2, .dk-brief.first h3, #todayBody .cover h2 { font-weight: 850; letter-spacing: -.03em; }
+
+/* Stocks: full width, same cards for the Top 20 */
+.view[data-view="stocks"] .large-title, .view[data-view="stocks"] .section-head { padding-left: 0; padding-right: 0; }
+.view[data-view="stocks"] .dk-scards { margin-left: 0; margin-right: 0; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); }
+.dk-sc-top .id .rk { font-style: normal; font-size: 12px; font-weight: 700; color: var(--label-2); margin-right: 7px; }
+.view[data-view="stocks"] .disclaimer { padding-left: 0; }
+
+/* the "Read the original" button sits centred at the bottom of the story window */
+.page .read-bar {
+  position: sticky; bottom: 0; left: auto; right: auto; width: auto; transform: none;
+  display: flex; justify-content: center; padding: 14px 24px 18px; border-radius: 0 0 18px 18px;
+}
+.page .read-bar[hidden] { display: none; }
+.page .read-bar .btn-primary { width: auto; min-width: 280px; max-width: 420px; padding: 0 34px; }
+.page-inner { padding-bottom: 24px; }
+
+/* Today: the red line stays on one line */
+.view[data-view="today"] .large-title .eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.view[data-view="today"] .large-title > * { flex-shrink: 0; }
