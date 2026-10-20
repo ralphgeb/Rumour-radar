@@ -266,3 +266,13 @@ body.has-page .dk-backdrop { opacity: 1; pointer-events: auto; }
 .view[data-view="today"] .large-title > * { flex-shrink: 0; }
 .view[data-view="stocks"] .bench-region { margin: 18px 0 10px; font-size: 12px; font-weight: 800; letter-spacing: .07em; color: var(--dk-strong); }
 .dk-sc-top .logo.idx-flag { font-size: 24px; }
+
+/* Tube box: stay inside the left column */
+.view[data-view="today"] .large-title { overflow-x: hidden; }
+.view[data-view="today"] .tube, .view[data-view="today"] .wx { width: 100%; max-width: 100%; box-sizing: border-box; min-width: 0; }
+.view[data-view="today"] .tb-row summary { flex-wrap: wrap; row-gap: 2px; }
+.view[data-view="today"] .tb-row .tb-name { flex: 1 1 auto; }
+.view[data-view="today"] .tb-row .tb-st { order: 3; flex: 1 0 100%; text-align: left; padding-left: 19px; white-space: normal; }
+.view[data-view="today"] .tb-row .tb-chev { order: 2; }
+.view[data-view="today"] .tb-rest { flex-wrap: wrap; gap: 4px 10px; }
+.view[data-view="today"] .tb-upd { white-space: normal; }
