@@ -139,7 +139,8 @@
   // ---------- theme ----------
   const darkQuery = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
   function applyTheme() {
-    const pref = store.get('rr.theme', 'auto');
+    // On a computer the default is Dark; on the phone it follows the iPhone. A choice in Settings always wins.
+    const pref = store.get('rr.theme', window.matchMedia('(min-width: 1100px)').matches ? 'dark' : 'auto');
     const dark = pref === 'dark' || (pref === 'auto' && darkQuery?.matches);
     document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
     $('#themeColor')?.setAttribute('content', dark ? '#000000' : '#f2f2f7');
