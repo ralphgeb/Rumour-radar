@@ -93,7 +93,17 @@
       if (r.ok) data = await r.json();
     } catch { /* keep what we have */ }
     render();
+    autoSync();
   }
+  // If this phone's list has stocks GitHub doesn't know about yet (e.g. after reinstalling the app),
+  // send the list once so the next update fetches their prices.
+  let autoSynced = false;
+  function autoSync() {
+    if (autoSynced || !data || !RR.hasLiveKey()) return;
+    const known = new Set([...(data.watch || []), ...(data.invalid || [])]);
+    if (watch.some((s) => !known.has(s) && !quote(s))) { autoSynced = true; scheduleSync(); }
+  }
+  RR.syncWatchlist = () => { autoSynced = false; autoSync(); };
   const quote = (sym) => data?.quotes?.[sym] || null;
   const chartOf = (sym) => data?.charts?.[sym] || {};
 
@@ -166,7 +176,7 @@
     return `<div class="stk-row${editing && rank == null ? ' editing' : ''}" data-stock="${esc(sym)}">
       ${editing && rank == null ? `<button class="stk-del" data-del="${esc(sym)}" aria-label="Remove ${esc(sym)}"><i></i></button>` : ''}
       ${rank != null ? `<span class="stk-rank">${rank}</span>` : ''}
-      <div class="stk-id"><b>${esc(label(sym))}</b><span>${esc(bad ? 'Ticker not found' : missing ? (RR.hasLiveKey() ? 'Fetching price…' : 'Price arrives with next update') : name)}</span></div>
+      <div class="stk-id"><b>${esc(label(sym))}</b><span>${esc(bad ? 'Ticker not found' : missing ? (RR.hasLiveKey() ? 'Fetching price…' : 'Turn on Live refresh in Settings') : name)}</span></div>
       ${missing ? '<span class="spark"></span>' : spark(sym)}
       <div class="stk-px">
         <span class="p">${missing ? '' : priceOf(sym, q, true)}</span>
@@ -257,7 +267,7 @@
     const s = data?.summaries?.[sym];
     if (!q || q.price == null) {
       return `<div class="dk-sc" data-stock="${esc(sym)}"><div class="dk-sc-top">${RR.logo(name, sym)}<div class="id"><b>${esc(sym)}</b><span>${esc(name)}</span></div></div>
-        <div class="dk-sc-nochart">${data?.invalid?.includes(sym) ? 'Ticker not found' : 'Price arrives with the next update'}</div></div>`;
+        <div class="dk-sc-nochart">${data?.invalid?.includes(sym) ? 'Ticker not found' : RR.hasLiveKey() ? 'Fetching the price — this takes about a minute…' : 'No price yet: add your Live refresh key in Settings so Scout can fetch your stocks'}</div></div>`;
     }
     return `<div class="dk-sc" data-stock="${esc(sym)}">
       <div class="dk-sc-top">${badge(name, sym)}

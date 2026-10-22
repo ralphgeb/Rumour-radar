@@ -1509,6 +1509,7 @@
     $('#tokenInput').value = '';
     renderSettings();
     toast('Key saved ✓ The refresh button now fetches brand-new news.');
+    window.RR?.syncWatchlist?.();
   });
   $('#tokenRemove').addEventListener('click', () => { store.del('rr.ghToken'); renderSettings(); toast('Key removed'); });
 
@@ -1541,7 +1542,7 @@
     if (!token || !repo) throw new Error('Turn on Live refresh first (add your GitHub key below), so the app can tell GitHub where to send notifications.');
     const gh = github(token, repo);
     const wf = await findWorkflow(gh);
-    const r = await gh(`/actions/workflows/${wf}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { mode: 'subscribe', watchlist: '-', push } }) });
+    const r = await gh(`/actions/workflows/${wf}/dispatches`, { method: 'POST', body: JSON.stringify({ ref: 'main', inputs: { mode: 'subscribe', watchlist: (window.RR?.watchlist?.() || []).join(',') || '-', push } }) });
     if (r.status === 422) throw new Error('Update your workflow file on GitHub first (see the latest instructions), then try again.');
     if (!r.ok) throw new Error(`GitHub couldn’t save it (${r.status}). Check your Live refresh key.`);
   }
